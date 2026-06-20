@@ -1,0 +1,37 @@
+# ENV — API anahtarları ve gizli bilgiler
+.env
+.env.local
+.env.*.local
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Dependencies
+node_modules/
+
+# Native build artifacts
+ios/Pods/
+ios/build/
+android/build/
+android/.gradle/
+android/app/build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp

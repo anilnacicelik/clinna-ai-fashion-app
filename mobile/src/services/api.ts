@@ -1,0 +1,304 @@
+/**
+ * CLINNA AI — API Service v4
+ * "Bulletproof connection" — every error scenario is logged.
+ *
+ * ── TO CHANGE THE IP: ──────────────────────────────────────────
+ *   Update the EXPO_PUBLIC_BACKEND_URL line in .env:
+ *   EXPO_PUBLIC_BACKEND_URL=http://192.168.X.X:8000
+ * ──────────────────────────────────────────────────────────────
+ */
+
+// .env → EXPO_PUBLIC_BACKEND_URL=http://192.168.X.X:8000
+const _envUrl    = (process.env.EXPO_PUBLIC_BACKEND_URL ?? '').replace(/\/$/, '');
+const _fallback  = 'http://192.168.1.111:8000';
+const _root      = _envUrl || _fallback;
+
+export const BASE_URL    = `${_root}/api/v1`;
+export const HEALTH_URL  = `${_root}/health`;
+export const DISPLAY_URL = _root;
+
+const TIMEOUT_QUICK_MS = 90_000;
+const TIMEOUT_DEEP_MS  = 90_000;
+
+// ═══════════════════════════════════════════════════════════════════
+// Types
+// ═══════════════════════════════════════════════════════════════════
+
+export interface ArchiveId {
+  brand:           string;
+  collection_year: string;
+  model_name:      string;
+}
+export interface ColorAnalysis {
+  colorblind_friendly_desc: string;
+  hex:                      string;
+}
+export interface FabricEstimate {
+  composition:   string;
+  texture_notes: string;
+}
+export interface Authenticity {
+  legit_probability_score: number;  // -1 = not verifiable (UNKNOWN brand); 0-100 = real score
+  signals:                 string[];
+}
+export interface Financials {
+  estimated_production_cost:   string;
+  brand_premium:               string;
+  current_resell_market_value: string;
+}
+export interface ArchiveReport {
+  archive_id:      ArchiveId;
+  color_analysis:  ColorAnalysis;
+  fabric_estimate: FabricEstimate;
+  authenticity:    Authenticity;
+  financials:      Financials;
+  is_fashion_item: boolean;
+  processing_ms:   number;
+  scan_mode:       'quick_scan' | 'deep_auth' | 'acc';
+  image_count:     number;
+}
+export type ScanMode = 'quick_scan' | 'deep_auth' | 'acc';
+export interface DeepAuthImages {
+  product: string;
+  label?:  string;
+  tag?:    string;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ApiError
+// ═══════════════════════════════════════════════════════════════════
+
+export class ApiError extends Error {
+  constructor(
+    public code:               number,
+    message:                   string,
+    public retryable:          boolean = false,
+    public retryAfterSeconds?: number,
+    public debugReason?:       string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// XHR POST — iOS native URLSession timeout'unu override eder
+// fetch + AbortController cannot exceed iOS's 60s hard timeout;
+// XMLHttpRequest.timeout sets NSURLSession directly.
+// ═══════════════════════════════════════════════════════════════════
+
+function xhrPost(
+  url:       string,
+  body:      FormData,
+  timeoutMs: number,
+): Promise<Response> {
+  const startedAt = Date.now();
+  console.log(`[CLINNA API] → POST ${url} (XHR timeout=${timeoutMs}ms)`);
+
+  return new Promise<Response>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.responseType = 'text';
+    xhr.timeout = timeoutMs; // iOS NSURLSession timeout'unu override eder
+
+    xhr.onload = () => {
+      const elapsed = Date.now() - startedAt;
+      console.log(`[CLINNA API] ← HTTP ${xhr.status} (${elapsed}ms)`);
+      const headers = new Headers();
+      xhr.getAllResponseHeaders().trim().split(/[\r\n]+/).forEach(line => {
+        const idx = line.indexOf(': ');
+        if (idx > 0) headers.append(line.slice(0, idx), line.slice(idx + 2));
+      });
+      resolve(new Response(xhr.responseText, {
+        status:     xhr.status,
+        statusText: xhr.statusText,
+        headers,
+      }));
+    };
+
+    xhr.ontimeout = () => {
+      const elapsed = Date.now() - startedAt;
+      console.error(`[CLINNA API] XHR TIMEOUT ${elapsed}ms → ${url}`);
+      reject(new ApiError(
+        408,
+        `REQUEST TIMEOUT — ${DISPLAY_URL}`,
+        true,
+        undefined,
+        `XHR timeout (${timeoutMs}ms) — server did not respond`,
+      ));
+    };
+
+    xhr.onerror = () => {
+      const elapsed = Date.now() - startedAt;
+      console.error(`[CLINNA API] XHR ERROR ${elapsed}ms → ${url}`);
+      console.error(`[CLINNA API] URL    : ${url}`);
+      console.error(`[CLINNA API] HOST   : ${DISPLAY_URL}`);
+      console.error(`[CLINNA API] HINT   : .env → EXPO_PUBLIC_BACKEND_URL=http://<LAN_IP>:8000`);
+      reject(new ApiError(
+        0,
+        `BACKEND UNREACHABLE\n${DISPLAY_URL}\n→ .env: EXPO_PUBLIC_BACKEND_URL`,
+        true,
+        undefined,
+        'Network error — check your Wi-Fi connection',
+      ));
+    };
+
+    xhr.send(body);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Fetch core — for GET requests only (health check)
+// ═══════════════════════════════════════════════════════════════════
+
+async function fetchWithTimeout(
+  url:       string,
+  options:   RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const ctrl      = new AbortController();
+  const timerId   = setTimeout(() => ctrl.abort(), timeoutMs);
+  const startedAt = Date.now();
+
+  console.log(`[CLINNA API] → ${options.method ?? 'GET'} ${url}`);
+
+  try {
+    const res = await fetch(url, { ...options, signal: ctrl.signal });
+    console.log(`[CLINNA API] ← HTTP ${res.status} (${Date.now() - startedAt}ms)`);
+    return res;
+  } catch (err: any) {
+    const elapsed = Date.now() - startedAt;
+
+    if (err.name === 'AbortError') {
+      console.error(`[CLINNA API] TIMEOUT ${elapsed}ms → ${url}`);
+      throw new ApiError(
+        408,
+        `REQUEST TIMEOUT — ${DISPLAY_URL}`,
+        true,
+        undefined,
+        `Timeout (${timeoutMs}ms) — server did not respond`,
+      );
+    }
+
+    const reason = (() => {
+      const msg = (err.message ?? '').toLowerCase();
+      if (msg.includes('network request failed')) return 'Network request failed — wrong IP or backend is down';
+      if (msg.includes('connection refused'))     return 'Connection refused — is uvicorn running?';
+      if (msg.includes('econnrefused'))           return 'ECONNREFUSED — port is closed';
+      if (msg.includes('timeout'))                return 'Connection timeout — are you on the same Wi-Fi?';
+      if (msg.includes('network'))                return 'Network error — check your Wi-Fi connection';
+      return `Unknown error: ${err.message}`;
+    })();
+
+    console.error(`[CLINNA API] ── NETWORK ERROR ──────────────────`);
+    console.error(`[CLINNA API] URL    : ${url}`);
+    console.error(`[CLINNA API] HOST   : ${DISPLAY_URL}`);
+    console.error(`[CLINNA API] REASON : ${reason}`);
+    console.error(`[CLINNA API] RAW    :`, err);
+    console.error(`[CLINNA API] HINT   : .env → EXPO_PUBLIC_BACKEND_URL=http://<LAN_IP>:8000`);
+
+    throw new ApiError(
+      0,
+      `BACKEND UNREACHABLE\n${DISPLAY_URL}\n→ .env: EXPO_PUBLIC_BACKEND_URL`,
+      true,
+      undefined,
+      reason,
+    );
+  } finally {
+    clearTimeout(timerId);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Response handler
+// ═══════════════════════════════════════════════════════════════════
+
+async function handleResponse(res: Response): Promise<ArchiveReport> {
+  if (res.status === 429) {
+    const after = parseInt(res.headers.get('Retry-After') ?? '30', 10);
+    console.warn(`[CLINNA API] 429 Quota — retry after ${after}s`);
+    throw new ApiError(429, `Sistem şu an çok yoğun. ${after}s sonra tekrar dene.`, true, after, 'Gemini rate limit');
+  }
+
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const j = await res.json();
+      if (j?.detail) detail = String(j.detail);
+      console.error(`[CLINNA API] HTTP ${res.status} body:`, j);
+    } catch {
+      console.error(`[CLINNA API] HTTP ${res.status} — could not parse body`);
+    }
+    throw new ApiError(res.status, `SERVER ERROR — ${detail}`, res.status >= 500);
+  }
+
+  try {
+    const data = await res.json();
+    console.log('[CLINNA API] Response OK — parsed ArchiveReport');
+    return data as ArchiveReport;
+  } catch (e) {
+    console.error('[CLINNA API] JSON parse failed:', e);
+    throw new ApiError(0, 'Sunucudan geçersiz yanıt geldi.', false);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// File helper — URI → FormData part (React Native multipart format)
+// ═══════════════════════════════════════════════════════════════════
+
+function uriToFormPart(uri: string): { uri: string; name: string; type: string } {
+  const rawName  = uri.split('/').pop() ?? 'photo.jpg';
+  const lower    = rawName.toLowerCase();
+  const isPng    = lower.endsWith('.png');
+  const name     = lower.endsWith('.jpg') || lower.endsWith('.jpeg') || isPng
+    ? rawName
+    : `${rawName}.jpg`;
+  const type     = name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+  console.log(`[CLINNA API] FormPart: name=${name} type=${type} uri=...${uri.slice(-40)}`);
+  return { uri, name, type };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Public API
+// ═══════════════════════════════════════════════════════════════════
+
+/** Quick Scan — single image */
+export async function quickScan(imageUri: string): Promise<ArchiveReport> {
+  console.log('[CLINNA API] quickScan start');
+  const body = new FormData();
+  body.append('image', uriToFormPart(imageUri) as any);
+
+  const res = await xhrPost(`${BASE_URL}/analyze`, body, TIMEOUT_QUICK_MS);
+  return handleResponse(res);
+}
+
+/** Deep Auth / Accessory — 1-3 images; only product is required */
+export async function deepAuth(imgs: DeepAuthImages, scanMode: 'deep_auth' | 'acc' = 'deep_auth'): Promise<ArchiveReport> {
+  const imgCount = [imgs.product, imgs.label, imgs.tag].filter(Boolean).length;
+  console.log(`[CLINNA API] deepAuth start — ${imgCount} images — mode=${scanMode}`);
+  const body = new FormData();
+  body.append('image_product', uriToFormPart(imgs.product) as any);
+  if (imgs.label) body.append('image_label', uriToFormPart(imgs.label) as any);
+  if (imgs.tag)   body.append('image_tag',   uriToFormPart(imgs.tag)   as any);
+  body.append('scan_mode', scanMode);
+
+  const res = await xhrPost(`${BASE_URL}/analyze/deep`, body, TIMEOUT_DEEP_MS);
+  return handleResponse(res);
+}
+
+/** Health check — is the backend reachable? */
+export async function checkHealth(): Promise<{ ok: boolean; latencyMs: number }> {
+  const t = Date.now();
+  try {
+    const res = await fetchWithTimeout(HEALTH_URL, { method: 'GET' }, 5_000);
+    return { ok: res.ok, latencyMs: Date.now() - t };
+  } catch (e) {
+    console.warn('[CLINNA API] Health check failed:', e);
+    return { ok: false, latencyMs: Date.now() - t };
+  }
+}
+
+export const CONFIG = {
+  displayUrl: DISPLAY_URL,
+  baseUrl:    BASE_URL,
+} as const;

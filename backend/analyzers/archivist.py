@@ -1,0 +1,300 @@
+"""
+CLINNA AI — Master Fashion Archivist Analyzer v4
+Changes v3 → v4:
+  - Fashion pre-check gate removed (Master Plan 01)
+  - Single Gemini call: vision_analyze_multi — 28s hard timeout active
+  - Fallback language: "INSUFFICIENT VISUAL DATA" protocol (no blame on the user)
+"""
+import logging
+from services.vision import vision_analyze_multi
+from models.schemas import (
+    ArchiveReport, ArchiveId, ColorAnalysis,
+    FabricEstimate, Authenticity, Financials,
+)
+
+log = logging.getLogger("clinna.archivist")
+
+# ─── System prompt ────────────────────────────────────────────────
+
+SYSTEM = """
+You are CLINNA, a world-class archive fashion authentication expert.
+
+⚡ FAST REJECT — ONLY for truly zero-fashion content:
+ONLY output the rejection JSON if the image contains NONE of the following:
+clothing, garments, footwear, bags, belts, hats, scarves, jewelry, watches, accessories,
+OR any person wearing any of these items.
+Reject ONLY for: pure food, furniture without fashion context, animals without accessories,
+electronics, blank walls, abstract nature with no people or fashion.
+CRITICAL: A person wearing ANY garment (jacket, coat, jeans, t-shirt, sneakers) → NOT a reject.
+Output rejection JSON ONLY when there is zero fashion content:
+{"archive_id":{"brand":"UNKNOWN","collection_year":"Unknown","model_name":"Non-fashion item"},"color_analysis":{"colorblind_friendly_desc":"","hex":""},"fabric_estimate":{"composition":"","texture_notes":""},"authenticity":{"legit_probability_score":0,"signals":["Non-fashion item detected"]},"financials":{"estimated_production_cost":"","brand_premium":"","current_resell_market_value":""},"is_fashion_item":false}
+
+════════════════════════════════════════════════════════════
+CRITICAL ANTI-HALLUCINATION RULES — READ BEFORE ANYTHING ELSE
+════════════════════════════════════════════════════════════
+
+RULE 1 — NEVER GUESS A BRAND.
+You may only identify a brand when you can see at least ONE of these:
+  (a) A clearly legible brand label or hang tag in the image
+  (b) A hardware signature you can name with certainty (e.g. RIRI zipper with engraved logo,
+      Lampo pull, Arc'teryx Archaeopteryx badge)
+  (c) An unmistakable, brand-defining design detail that cannot belong to any other label
+      (e.g. Margiela's exposed seams + white oversized silhouette + no visible branding)
+
+If NONE of these are visible, write "UNKNOWN" for brand. Do NOT infer a brand from:
+  - Aged or distressed appearance alone
+  - Dark colorway alone
+  - General avant-garde silhouette
+  - Vague resemblance to a brand's aesthetic
+
+A confident "UNKNOWN" is infinitely better than a wrong brand name.
+
+RULE 2 — COLLECTION YEAR: only state if you can justify it from a visible label,
+known colorway, or documented detail. Otherwise "Unknown".
+
+RULE 3 — if the image does not show a garment, footwear, accessory or jewelry,
+set is_fashion_item to false and fill all other fields with empty strings / 0 / [].
+════════════════════════════════════════════════════════════
+
+Your expertise covers:
+Maison Margiela (all lines/eras), Rick Owens (mainline, DRKSHDW, LILIES, TECUATL),
+Number (N)ine, Raf Simons (solo + Jil Sander + Dior Homme), Helmut Lang (pre-2004),
+Yohji Yamamoto (Y's, Y-3, mainline), Comme des Garçons (all sub-labels),
+Ann Demeulemeester, Dries Van Noten, Issey Miyake, A.P.C., Stone Island (all decades),
+CP Company, Stüssy (all eras), Supreme, Palace, BAPE, Vintage Nike (Blue/Grey/Orange Tag),
+Adidas trefoil archive, Arc'teryx (LEAF, Veilance, mainline by season),
+Patagonia vintage, Carhartt WIP, Levi's vintage red tab, Wrangler, Lee archive,
+and all luxury houses (Hermès, LV, Gucci, Prada, Bottega Veneta, etc.).
+
+You know production economics (CMT labor rates, fabric costs by region) and current
+resell values on Grailed, Depop, Vestiaire Collective, Yahoo Japan, eBay.
+
+When multiple images are provided, treat them as a single item from multiple angles.
+Image order: [1] Full garment/product, [2] Interior label, [3] Wash tag / barcode.
+"""
+
+# ─── User prompt — JSON schema ───────────────────────────────────
+
+USER = """
+Always respond in English. All text values in the JSON — color names, fabric composition, texture notes, authenticity signals, model names, and every other field — must be written in English, regardless of the input language or any examples shown.
+
+Examine the provided image(s) carefully.
+
+Return ONLY a single valid JSON object with exactly this schema.
+No markdown, no backticks, no explanation outside the JSON.
+Start with { and end with }.
+
+{
+  "archive_id": {
+    "brand": "<Brand name if CONFIRMED by label/hardware/unmistakable detail — otherwise EXACTLY the string 'UNKNOWN'>",
+    "collection_year": "<Year/range if verifiable — otherwise 'Unknown'>",
+    "model_name": "<Specific model if identifiable — otherwise 'Unknown'>"
+  },
+  "color_analysis": {
+    "colorblind_friendly_desc": "<Precise color name in English, e.g. 'Dark olive green'>",
+    "hex": "<e.g. '#3B3B2F'>"
+  },
+  "fabric_estimate": {
+    "composition": "<e.g. '85% Cotton, 15% Polyester' or 'Unknown'>",
+    "texture_notes": "<1 sentence tactile/visual description>"
+  },
+  "authenticity": {
+    "legit_probability_score": <integer 0-100, or -1 if brand is UNKNOWN (meaning: no brand to verify — this is NOT a statement that the item is fake)>,
+    "signals": ["<concrete technical observation>", ...]
+  },
+  "financials": {
+    "estimated_production_cost": "<e.g. '$18 - $24' or '' if brand is UNKNOWN>",
+    "brand_premium": "<e.g. '$132 - $176' or '' if brand is UNKNOWN>",
+    "current_resell_market_value": "<e.g. '$150 - $220 (Grailed)' or '' if brand is UNKNOWN>"
+  },
+  "is_fashion_item": <boolean — see rule below>
+}
+
+CRITICAL RULES:
+- is_fashion_item: Write TRUE for ANY clothing, garment, shirt, pants, jacket, coat,
+  dress, shoes, boots, sneakers, bag, belt, hat, scarf, jewelry, watch, or textile.
+  ALSO write TRUE when a person is visible who is wearing any fashion item — the wearer
+  counts as a fashion subject regardless of how much of the frame they occupy.
+  Write FALSE ONLY if the image contains zero fashion items AND no person wearing fashion
+  (e.g. plain food, empty furniture, blank wall). DEFAULT IS TRUE — when in doubt write true.
+- brand = "UNKNOWN" if you cannot confirm via label/hardware/unmistakable detail. Never guess.
+- legit_probability_score = -1 if brand is "UNKNOWN" (NOT 0 — -1 means no brand to verify, not a fake verdict).
+- financials = empty strings if brand = "UNKNOWN".
+- signals are ALWAYS required (minimum 3), even when brand is UNKNOWN — the material and construction observations are still valuable.
+- When the item's silhouette or construction visually resembles a known brand but NO label or hardware mark is visible (brand stays UNKNOWN), add a signal such as: "Silhouette/construction resembles [Brand] but no visible brand mark — add an interior label photo and run a Deep Scan to verify."
+"""
+
+# ─── Mode context ─────────────────────────────────────────────────
+
+def _mode_context(scan_mode: str, image_count: int) -> str:
+    if scan_mode == "deep_auth" and image_count > 1:
+        return (
+            f"\n\nDEEP AUTH MODE — {image_count} images of the SAME item. "
+            "Image 1: full garment. Image 2: interior label — examine font, stitching, stock. "
+            "Image 3 (if present): wash/care tag or barcode. "
+            "Cross-reference ALL images. Contradictions lower the score. "
+            "If the label image reveals the brand clearly, use it; otherwise UNKNOWN."
+        )
+    if scan_mode == "acc":
+        extra = ""
+        if image_count > 1:
+            extra = (
+                f" {image_count} images provided. "
+                "Image 1: full accessory overview. "
+                "Image 2: maker's mark / stamp / logo — use it to identify brand if visible. "
+            )
+            if image_count > 2:
+                extra += "Image 3: material detail or hardware close-up. "
+            extra += "Cross-reference all images; contradictions lower the score."
+        return (
+            "\n\nACCESSORY MODE — analyze as accessory (belt, bag, footwear, jewelry)."
+            + extra + "\n"
+            "Belt: buckle hardware quality, brand stamp depth, leather grain, edge finishing, stitch count.\n"
+            "Bag/footwear: stitching regularity, hardware finish, lining quality, sole construction.\n"
+            "Jewelry/soft-solder: solder joint cleanliness, maker's mark, patina authenticity.\n"
+            "Same UNKNOWN rule applies: only name the brand if you see a confirmed mark."
+        )
+    return ""
+
+# ─── Safe getters ─────────────────────────────────────────────────
+
+def _s(obj, *keys, default=""):
+    for k in keys:
+        if not isinstance(obj, dict): return default
+        obj = obj.get(k, default)
+    return obj if obj is not None else default
+
+def _i(obj, *keys, lo=0, hi=100, default=0):
+    try:
+        return max(lo, min(hi, int(float(str(_s(obj, *keys, default=default))))))
+    except (TypeError, ValueError):
+        return default
+
+def _lst(obj, *keys) -> list[str]:
+    val = _s(obj, *keys, default=[])
+    if isinstance(val, list):
+        return [str(x) for x in val if x]
+    return []
+
+# ─── Fallback ArchiveReport ───────────────────────────────────────
+
+def _fallback_report(reason: str = "[ INSUFFICIENT VISUAL DATA ]") -> ArchiveReport:
+    """
+    Server never crashes — returns a protocol message on insufficient data or timeout.
+    Does not blame the user's item; asks them to reframe.
+    """
+    return ArchiveReport(
+        archive_id=ArchiveId(
+            brand="UNKNOWN",
+            collection_year="Unknown",
+            model_name=reason,
+        ),
+        color_analysis=ColorAnalysis(
+            colorblind_friendly_desc="",
+            hex="",
+        ),
+        fabric_estimate=FabricEstimate(
+            composition="",
+            texture_notes="",
+        ),
+        authenticity=Authenticity(
+            legit_probability_score=0,
+            signals=[reason],
+        ),
+        financials=Financials(
+            estimated_production_cost="",
+            brand_premium="",
+            current_resell_market_value="",
+        ),
+        is_fashion_item=False,
+    )
+
+# ─── Main function ────────────────────────────────────────────────
+
+async def run_archive_analysis(
+    images:    list[tuple[bytes, str]],
+    scan_mode: str = "quick_scan",
+) -> ArchiveReport:
+    """
+    Single Gemini call — no pre-check gate.
+    28s asyncio.wait_for hard timeout is active in vision.py.
+    Never crashes on error; returns protocol fallback.
+    """
+    user_prompt = USER + _mode_context(scan_mode, len(images))
+
+    # ── Gemini call (28s hard timeout active in vision.py) ────────
+    try:
+        raw = await vision_analyze_multi(
+            images=images,
+            system_prompt=SYSTEM,
+            user_prompt=user_prompt,
+            temperature=0.10,
+        )
+    except ValueError as e:
+        msg = str(e)
+        if "timed out" in msg or "timeout" in msg.lower():
+            log.error("Gemini timeout: %s", msg)
+            return _fallback_report(
+                "[ SYSTEM OVERLOAD — REFRAME AND RETRY ]"
+            )
+        log.error("JSON parse / API error: %s", msg)
+        return _fallback_report("[ INSUFFICIENT VISUAL DATA — REFRAME AND RETRY ]")
+    except Exception as e:
+        log.error("Gemini call failed: %s", e)
+        return _fallback_report("[ SYSTEM OVERLOAD — REFRAME AND RETRY ]")
+
+    # ── is_fashion_item check ─────────────────────────────────────
+    # Gemini may return "true"/"false" string, 0/1 int, or bool
+    raw_fashion = raw.get("is_fashion_item", True)
+    if isinstance(raw_fashion, str):
+        is_fashion = raw_fashion.strip().lower() not in ("false", "0", "no")
+    elif isinstance(raw_fashion, (int, float)):
+        is_fashion = bool(raw_fashion)
+    else:
+        is_fashion = bool(raw_fashion) if raw_fashion is not None else True
+
+    if is_fashion is False:
+        log.info("Non-fashion item explicitly detected by main model")
+        return _fallback_report("[ INSUFFICIENT VISUAL DATA — REFRAME AND RETRY ]")
+
+    # ── Normalize ─────────────────────────────────────────────────
+    try:
+        ai = raw.get("archive_id",      {}) or {}
+        ca = raw.get("color_analysis",  {}) or {}
+        fe = raw.get("fabric_estimate", {}) or {}
+        au = raw.get("authenticity",    {}) or {}
+        fi = raw.get("financials",      {}) or {}
+
+        signals = _lst(au, "signals")
+        if not signals:
+            signals = ["Insufficient data for detailed signal analysis"]
+
+        return ArchiveReport(
+            archive_id=ArchiveId(
+                brand=           _s(ai, "brand"),
+                collection_year= _s(ai, "collection_year"),
+                model_name=      _s(ai, "model_name"),
+            ),
+            color_analysis=ColorAnalysis(
+                colorblind_friendly_desc=_s(ca, "colorblind_friendly_desc"),
+                hex=_s(ca, "hex"),
+            ),
+            fabric_estimate=FabricEstimate(
+                composition=  _s(fe, "composition"),
+                texture_notes=_s(fe, "texture_notes"),
+            ),
+            authenticity=Authenticity(
+                legit_probability_score=_i(au, "legit_probability_score", lo=-1),
+                signals=signals,
+            ),
+            financials=Financials(
+                estimated_production_cost=  _s(fi, "estimated_production_cost"),
+                brand_premium=              _s(fi, "brand_premium"),
+                current_resell_market_value=_s(fi, "current_resell_market_value"),
+            ),
+            is_fashion_item=True,
+        )
+
+    except Exception as e:
+        log.error("ArchiveReport construction failed: %s", e)
+        return _fallback_report("[ SYSTEM ERROR — RETRY OPERATION ]")
