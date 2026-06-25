@@ -30,11 +30,11 @@ I come at this as a thrifter and archive fashion collector. When you find a piec
 
 ## Screenshots
 
-![Home](./screenshots/01-home.png)
-![Authentic result](./screenshots/02-result-authentic.png)
-![Evidence detail](./screenshots/03-evidence.png)
-![Evidence & economics](./screenshots/04-evidence-economics.png)
-![Capture](./screenshots/05-capture.png)
+![Home](./screenshots/01-home.png.jpeg)
+![Authentic result](./screenshots/02-result-authentic.png.jpeg)
+![Evidence detail](./screenshots/03-evidence.png.jpeg)
+![Evidence & economics](./screenshots/04-evidence-economics.png.jpeg)
+![Capture](./screenshots/05-capture.png.jpeg)
 
 ---
 
