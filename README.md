@@ -143,11 +143,6 @@ npx expo start
 
 Scan the QR code with Expo Go, or press `a` for Android emulator / `i` for iOS simulator.
 
----
-
-## Note
-
-This is a portfolio project demonstrating a full-stack, AI-integrated mobile application — not a published commercial product.
 
 ---
 
