@@ -1,9 +1,16 @@
 from dotenv import load_dotenv
 
 load_dotenv()
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import analyze
+
+_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+if not _origins_env or _origins_env.strip() == "*":
+    _allowed_origins = ["*"]
+else:
+    _allowed_origins = [o.strip() for o in _origins_env.split(",") if o.strip()]
 
 app = FastAPI(
     title="CLINNA AI",
@@ -13,7 +20,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # dev mode — restrict to app origins in production
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

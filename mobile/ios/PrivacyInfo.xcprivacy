@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        iOS 17+ Privacy Manifest — required for App Store submission.
+        Declares which system APIs the app accesses and what user data is collected.
+        https://developer.apple.com/documentation/bundleresources/privacy_manifest_files
+    -->
+
+    <!-- Required Reason APIs used by this app and its dependencies -->
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <!-- UserDefaults — used by AsyncStorage (@react-native-async-storage) -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <!-- CA92.1: Access user defaults to read/write app data -->
+                <string>CA92.1</string>
+            </array>
+        </dict>
+        <!-- File timestamp — used by Expo image operations -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <!-- C617.1: File timestamps for app-created files only -->
+                <string>C617.1</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- Data types collected by this app -->
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+            <!-- Photos are NOT linked to user identity -->
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <false/>
+            <!-- Photos are NOT used for tracking -->
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <!-- Photos are used solely for app functionality (garment scanning) -->
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- This app does NOT track users across apps/websites -->
+    <key>NSPrivacyTracking</key>
+    <false/>
+
+    <!-- No tracking domains -->
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+</dict>
+</plist>

@@ -385,14 +385,21 @@ export default function CameraScreen() {
 
   const { state, runQuickScan, runDeepAuth, runAccScan, reset } = useAnalysis();
 
-  // FIX 3: Scan counter
-  const { scansLeft, decrement } = useScansLeft();
+  // Entitlement state
+  const { scansLeft, credits, isProActive, decrement, useCredit } = useScansLeft();
 
-  // ── Navigate on success + decrement scan count ────────────────
+  // Which currency was decided at the moment AUTHENTICATE was pressed
+  const entitlementMethodRef = useRef<'decrement' | 'useCredit' | 'pro' | null>(null);
+
+  // ── Navigate on success + deduct correct entitlement ─────────
   useEffect(() => {
     if (state.status === 'success') {
       hap.success(); playSFX('success');
-      decrement(); // FIX 3: decrement counter on successful scan
+      // Deduct the currency that was chosen when scan started
+      if (entitlementMethodRef.current === 'decrement') decrement();
+      else if (entitlementMethodRef.current === 'useCredit') useCredit();
+      // 'pro' → no deduction needed
+      entitlementMethodRef.current = null;
       const preview = mode === 'quick_scan' ? capturedUri : deepUris[0];
       navigation.replace('Result', { imageUri: preview!, result: state.data });
       reset();
@@ -507,6 +514,23 @@ export default function CameraScreen() {
   // ── Analyze ───────────────────────────────────────────────────
   const handleAnalyze = useCallback(() => {
     hap.tap(); playSFX('tap');
+
+    // Entitlement gate — no scans, no credits, not pro → Paywall
+    if (scansLeft === 0 && credits === 0 && !isProActive) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      navigation.navigate('Paywall');
+      return;
+    }
+
+    // Decide which currency to deduct on success
+    if (isProActive) {
+      entitlementMethodRef.current = 'pro';
+    } else if (scansLeft > 0) {
+      entitlementMethodRef.current = 'decrement';
+    } else {
+      entitlementMethodRef.current = 'useCredit';
+    }
+
     if (mode === 'quick_scan') {
       if (!capturedUri) return;
       runQuickScan(capturedUri);
@@ -521,7 +545,7 @@ export default function CameraScreen() {
       const imgs: DeepAuthImages = { product, ...(label ? { label } : {}), ...(tag ? { tag } : {}) };
       runDeepAuth(imgs);
     }
-  }, [mode, capturedUri, deepUris, runQuickScan, runDeepAuth, runAccScan, scansLeft]);
+  }, [mode, capturedUri, deepUris, runQuickScan, runDeepAuth, runAccScan, scansLeft, credits, isProActive]);
 
   // ── Skip 3rd step ─────────────────────────────────────────────
   const handleSkip3 = useCallback(() => {

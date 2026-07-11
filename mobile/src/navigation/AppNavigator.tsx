@@ -18,13 +18,13 @@ import CameraScreen  from '../screens/CameraScreen';
 import ResultScreen  from '../screens/ResultScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import PaywallScreen from '../screens/PaywallScreen';
-import { ArchiveReport } from '../services/api';
+import { ArchiveReport, PreviewReport } from '../services/api';
 
 export type RootStackParamList = {
   Auth:    undefined;
   Home:    undefined;
   Camera:  undefined;
-  Result:  { imageUri: string; result: ArchiveReport };
+  Result:  { imageUri: string; result: ArchiveReport; isMocked?: boolean; previewData?: PreviewReport };
   History: undefined;
   Paywall: undefined;
 };

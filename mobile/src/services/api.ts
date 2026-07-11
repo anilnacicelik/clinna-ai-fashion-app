@@ -63,6 +63,13 @@ export interface DeepAuthImages {
   label?:  string;
   tag?:    string;
 }
+export interface PreviewReport {
+  anomaly_count:   number;
+  risk_score:      number;   // 0-100 — authentication risk (0=safe, 100=risky)
+  category:        string;
+  is_fashion_item: boolean;
+  processing_ms:   number;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // ApiError
@@ -262,6 +269,27 @@ function uriToFormPart(uri: string): { uri: string; name: string; type: string }
 // Public API
 // ═══════════════════════════════════════════════════════════════════
 
+async function handlePreviewResponse(res: Response): Promise<PreviewReport> {
+  if (res.status === 429) {
+    const after = parseInt(res.headers.get('Retry-After') ?? '30', 10);
+    throw new ApiError(429, `Sistem şu an çok yoğun. ${after}s sonra tekrar dene.`, true, after, 'Gemini rate limit');
+  }
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const j = await res.json();
+      if (j?.detail) detail = String(j.detail);
+    } catch {}
+    throw new ApiError(res.status, `SERVER ERROR — ${detail}`, res.status >= 500);
+  }
+  try {
+    const data = await res.json();
+    return data as PreviewReport;
+  } catch (e) {
+    throw new ApiError(0, 'Sunucudan geçersiz yanıt geldi.', false);
+  }
+}
+
 /** Quick Scan — single image */
 export async function quickScan(imageUri: string): Promise<ArchiveReport> {
   console.log('[CLINNA API] quickScan start');
@@ -284,6 +312,15 @@ export async function deepAuth(imgs: DeepAuthImages, scanMode: 'deep_auth' | 'ac
 
   const res = await xhrPost(`${BASE_URL}/analyze/deep`, body, TIMEOUT_DEEP_MS);
   return handleResponse(res);
+}
+
+/** Preview Scan — single image, returns lightweight PreviewReport */
+export async function quickScanPreview(imageUri: string): Promise<PreviewReport> {
+  console.log('[CLINNA API] quickScanPreview start');
+  const body = new FormData();
+  body.append('image', uriToFormPart(imageUri) as any);
+  const res = await xhrPost(`${BASE_URL}/analyze/preview`, body, TIMEOUT_QUICK_MS);
+  return handlePreviewResponse(res);
 }
 
 /** Health check — is the backend reachable? */

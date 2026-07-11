@@ -147,7 +147,7 @@ Scan the QR code with Expo Go, or press `a` for Android emulator / `i` for iOS s
 
 ## Note
 
-This is a portfolio project demonstrating a full-stack, AI-integrated mobile application — not a published commercial product.
+Clinna is a production-ready, AI-powered forensic cost and authentication analysis tool for archive and avant-garde fashion. Engineered with fault-tolerant asynchronous processing and brutalist terminal aesthetics.
 
 ---
 

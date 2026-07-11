@@ -10,6 +10,7 @@ from services.vision import vision_analyze_multi
 from models.schemas import (
     ArchiveReport, ArchiveId, ColorAnalysis,
     FabricEstimate, Authenticity, Financials,
+    PreviewReport,
 )
 
 log = logging.getLogger("clinna.archivist")
@@ -208,6 +209,80 @@ def _fallback_report(reason: str = "[ INSUFFICIENT VISUAL DATA ]") -> ArchiveRep
         ),
         is_fashion_item=False,
     )
+
+# ─── Preview system / user prompts ────────────────────────────────
+
+PREVIEW_SYSTEM = """
+You are CLINNA, a fashion item classifier.
+Return ONLY a compact JSON object — no markdown, no extra text.
+"""
+
+PREVIEW_USER = """
+Examine the provided image(s) and return ONLY a valid JSON object with exactly these fields:
+
+{
+  "anomaly_count": <integer — visible defects / damage / wear issues, 0 if none>,
+  "risk_score": <integer 0-100 — authentication risk (0=authentic or unverifiable, 100=clearly counterfeit)>,
+  "category": "<item type in English — e.g. 'jacket', 'sneakers', 'bag', 'jeans'; 'unknown' if unclear>",
+  "is_fashion_item": <true if clothing/footwear/accessory/jewelry, false otherwise>
+}
+
+Start with { and end with }. No backticks, no explanation.
+"""
+
+# ─── Fallback PreviewReport ───────────────────────────────────────
+
+def _fallback_preview(is_fashion: bool = False) -> PreviewReport:
+    return PreviewReport(
+        anomaly_count=0,
+        risk_score=0,
+        category="unknown",
+        is_fashion_item=is_fashion,
+    )
+
+# ─── Preview function ─────────────────────────────────────────────
+
+async def run_archive_preview(
+    images: list[tuple[bytes, str]],
+) -> PreviewReport:
+    """
+    Lightweight Gemini call — returns anomaly_count, risk_score, category, is_fashion_item.
+    max_output_tokens=200; same GEMINI_TIMEOUT active in vision.py.
+    """
+    try:
+        raw = await vision_analyze_multi(
+            images=images,
+            system_prompt=PREVIEW_SYSTEM,
+            user_prompt=PREVIEW_USER,
+            temperature=0.10,
+            max_output_tokens=200,
+        )
+    except ValueError as e:
+        log.error("Preview Gemini error: %s", e)
+        return _fallback_preview()
+    except Exception as e:
+        log.error("Preview call failed: %s", e)
+        return _fallback_preview()
+
+    try:
+        raw_fashion = raw.get("is_fashion_item", True)
+        if isinstance(raw_fashion, str):
+            is_fashion = raw_fashion.strip().lower() not in ("false", "0", "no")
+        elif isinstance(raw_fashion, (int, float)):
+            is_fashion = bool(raw_fashion)
+        else:
+            is_fashion = bool(raw_fashion) if raw_fashion is not None else True
+
+        return PreviewReport(
+            anomaly_count=_i(raw, "anomaly_count", lo=0, hi=999),
+            risk_score=_i(raw, "risk_score", lo=0, hi=100),
+            category=_s(raw, "category") or "unknown",
+            is_fashion_item=is_fashion,
+        )
+    except Exception as e:
+        log.error("PreviewReport construction failed: %s", e)
+        return _fallback_preview()
+
 
 # ─── Main function ────────────────────────────────────────────────
 

@@ -6,8 +6,8 @@ POST /api/v1/analyze/deep     — deep_auth:  1-3 images
 """
 import time
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from models.schemas import ArchiveReport
-from analyzers.archivist import run_archive_analysis
+from models.schemas import ArchiveReport, PreviewReport
+from analyzers.archivist import run_archive_analysis, run_archive_preview
 
 router = APIRouter()
 
@@ -74,4 +74,51 @@ async def analyze_deep(
     report.processing_ms = int((time.monotonic() - t0) * 1000)
     report.scan_mode     = scan_mode
     report.image_count   = len(images)
+    return report
+
+
+# ── PREVIEW (quick) ───────────────────────────────────────────────
+
+@router.post("/analyze/preview", response_model=PreviewReport)
+async def analyze_preview(
+    image: UploadFile = File(..., description="Single garment photo"),
+):
+    """Preview Scan — single image, returns anomaly count, risk score, and category."""
+    mime = _validate_image(image)
+    data = await image.read()
+    if len(data) > MAX_SIZE:
+        raise HTTPException(413, "Image too large. Max 10 MB.")
+
+    t0 = time.monotonic()
+    report = await run_archive_preview(images=[(data, mime)])
+    report.processing_ms = int((time.monotonic() - t0) * 1000)
+    return report
+
+
+# ── PREVIEW DEEP ──────────────────────────────────────────────────
+
+@router.post("/analyze/preview/deep", response_model=PreviewReport)
+async def analyze_preview_deep(
+    image_product: UploadFile = File(...,  description="Full product / garment shot"),
+    image_label:   UploadFile = File(None, description="Interior brand label (optional)"),
+    image_tag:     UploadFile = File(None, description="Wash care tag / barcode (optional)"),
+):
+    """Preview Deep — 1 to 3 images, returns anomaly count, risk score, and category."""
+    images: list[tuple[bytes, str]] = []
+
+    for img in [image_product, image_label, image_tag]:
+        if img is None:
+            continue
+        mime = _validate_image(img)
+        data = await img.read()
+        if len(data) > MAX_SIZE:
+            raise HTTPException(413, f"Image '{img.filename}' too large. Max 10 MB.")
+        images.append((data, mime))
+
+    if len(images) < 1:
+        raise HTTPException(400, "At least one image (product) is required.")
+
+    t0 = time.monotonic()
+    report = await run_archive_preview(images=images)
+    report.processing_ms = int((time.monotonic() - t0) * 1000)
     return report

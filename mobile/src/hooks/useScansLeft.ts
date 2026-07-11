@@ -1,34 +1,44 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 
+interface Entitlement {
+  scans_left:    number;
+  credits:       number;
+  is_pro:        boolean;
+  is_pro_active: boolean;
+}
+
 export function useScansLeft() {
-  const [scansLeft, setScansLeft] = useState<number>(0);
+  const [scansLeft,   setScansLeft]   = useState<number>(0);
+  const [credits,     setCredits]     = useState<number>(0);
+  const [isPro,       setIsPro]       = useState<boolean>(false);
+  const [isProActive, setIsProActive] = useState<boolean>(false);
 
   const load = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('scans_left')
-        .eq('id', session.user.id)
-        .single();
+      const { data, error } = await supabase.rpc('get_user_entitlement');
 
       if (error) {
         if (error.code === 'PGRST116') {
-          // No profile row — create with default 3 scans
+          // Profile row missing — create with new defaults
           const { error: upsertErr } = await supabase
             .from('profiles')
-            .upsert({ id: session.user.id, scans_left: 3 }, { onConflict: 'id' });
-          if (!upsertErr) setScansLeft(3);
+            .upsert({ id: session.user.id, scans_left: 2 }, { onConflict: 'id' });
+          if (!upsertErr) setScansLeft(2);
         } else {
           console.error('[CLINNA] useScansLeft load:', error);
         }
         return;
       }
 
-      setScansLeft(Math.max(0, data.scans_left ?? 0));
+      const ent = data as Entitlement;
+      setScansLeft(Math.max(0, ent.scans_left    ?? 0));
+      setCredits(  Math.max(0, ent.credits       ?? 0));
+      setIsPro(               ent.is_pro         ?? false);
+      setIsProActive(         ent.is_pro_active  ?? false);
     } catch (e) {
       console.error('[CLINNA] useScansLeft load:', e);
     }
@@ -51,7 +61,25 @@ export function useScansLeft() {
     }
   }, []);
 
+  // Deduct one credit — returns true if credit was consumed, false if none left
+  const useCredit = useCallback(async (): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.rpc('use_credit');
+      if (error) {
+        console.error('[CLINNA] useScansLeft useCredit:', error);
+        return false;
+      }
+      if (data === true) {
+        setCredits(prev => Math.max(0, prev - 1));
+      }
+      return data === true;
+    } catch (e) {
+      console.error('[CLINNA] useScansLeft useCredit:', e);
+      return false;
+    }
+  }, []);
+
   useEffect(() => { load(); }, []);
 
-  return { scansLeft, load, decrement };
+  return { scansLeft, credits, isPro, isProActive, load, decrement, useCredit };
 }

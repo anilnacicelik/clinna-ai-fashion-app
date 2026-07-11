@@ -56,10 +56,11 @@ def _build_image_parts(images: list[tuple[bytes, str]]) -> list:
 
 
 async def _call_gemini_async(
-    images:        list[tuple[bytes, str]],
-    system_prompt: str,
-    user_prompt:   str,
-    temperature:   float,
+    images:           list[tuple[bytes, str]],
+    system_prompt:    str,
+    user_prompt:      str,
+    temperature:      float,
+    max_output_tokens: int = 2000,
 ) -> dict[str, Any]:
     """
     Native async Gemini call — does not use asyncio.to_thread.
@@ -68,7 +69,7 @@ async def _call_gemini_async(
     image_parts = _build_image_parts(images)
     contents    = [types.Part.from_text(text=user_prompt)] + image_parts
 
-    log.info("Calling Gemini model=%s images=%d temp=%.2f", MODEL, len(images), temperature)
+    log.info("Calling Gemini model=%s images=%d temp=%.2f max_tokens=%d", MODEL, len(images), temperature, max_output_tokens)
 
     try:
         response = await client.aio.models.generate_content(
@@ -76,7 +77,7 @@ async def _call_gemini_async(
             contents=contents,
             config=types.GenerateContentConfig(
                 temperature=temperature,
-                max_output_tokens=2000,
+                max_output_tokens=max_output_tokens,
                 system_instruction=system_prompt,
             ),
         )
@@ -104,10 +105,11 @@ GEMINI_TIMEOUT = 40  # seconds — 1.5-flash typically 5-15s; 40s hard ceiling, 
 
 
 async def vision_analyze_multi(
-    images:        list[tuple[bytes, str]],
-    system_prompt: str,
-    user_prompt:   str,
-    temperature:   float = 0.15,
+    images:            list[tuple[bytes, str]],
+    system_prompt:     str,
+    user_prompt:       str,
+    temperature:       float = 0.15,
+    max_output_tokens: int   = 2000,
 ) -> dict[str, Any]:
     """
     Single direct Gemini call. No pre-check gate.
@@ -120,7 +122,7 @@ async def vision_analyze_multi(
     )
     try:
         return await asyncio.wait_for(
-            _call_gemini_async(images, system_prompt, user_prompt, temperature),
+            _call_gemini_async(images, system_prompt, user_prompt, temperature, max_output_tokens),
             timeout=GEMINI_TIMEOUT,
         )
     except asyncio.TimeoutError:

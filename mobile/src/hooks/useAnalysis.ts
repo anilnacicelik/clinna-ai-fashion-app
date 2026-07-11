@@ -4,12 +4,13 @@
  * Includes 429 quota countdown and detailed error logging.
  */
 import { useState, useCallback, useRef } from 'react';
-import { quickScan, deepAuth, ArchiveReport, ApiError, DeepAuthImages, ScanMode } from '../services/api';
+import { quickScan, deepAuth, quickScanPreview, ArchiveReport, PreviewReport, ApiError, DeepAuthImages, ScanMode } from '../services/api';
 import { compressForUpload } from '../services/imageCompress';
 
 export type AnalysisState =
   | { status: 'idle' }
   | { status: 'loading'; mode: ScanMode }
+  | { status: 'preview'; data: PreviewReport }
   | { status: 'success'; data: ArchiveReport }
   | { status: 'error';   message: string; retryable: boolean }
   | { status: 'quota';   countdown: number };
@@ -102,7 +103,21 @@ export function useAnalysis() {
     }
   }, [_handleError]);
 
+  const runQuickScanPreview = useCallback(async (imageUri: string) => {
+    setState({ status: 'loading', mode: 'quick_scan' });
+    try {
+      console.log('[CLINNA] compressForUpload (preview) start — uri:', imageUri.slice(-50));
+      const compressed = await compressForUpload(imageUri);
+      console.log('[CLINNA] compressForUpload (preview) done');
+      const data = await quickScanPreview(compressed);
+      setState({ status: 'preview', data });
+    } catch (err) {
+      console.error('[CLINNA] Preview scan error:', err);
+      _handleError(err);
+    }
+  }, [_handleError]);
+
   const reset = useCallback(() => { clearTimer(); setState({ status: 'idle' }); }, []);
 
-  return { state, runQuickScan, runDeepAuth, runAccScan, reset };
+  return { state, runQuickScan, runDeepAuth, runAccScan, runQuickScanPreview, reset };
 }
