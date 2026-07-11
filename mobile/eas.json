@@ -1,35 +1,33 @@
 {
   "cli": {
-    "version": ">= 12.0.0"
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "preview": {
       "distribution": "internal",
-      "ios": {
-        "simulator": false
-      },
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://clinna-ai-fashion-app-production.up.railway.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://jtogejbwzqjkekrdjdnw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_XPX3alGaypKl8nSfubdJGA_d59Uddit"
       }
     },
     "production": {
       "distribution": "store",
-      "autoSubmit": false,
-      "ios": {
-        "buildConfiguration": "Release"
-      },
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://clinna-ai-fashion-app-production.up.railway.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://jtogejbwzqjkekrdjdnw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_XPX3alGaypKl8nSfubdJGA_d59Uddit"
       }
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "appleId": "your-apple-id@example.com",
-        "ascAppId": "your-app-store-connect-app-id",
-        "appleTeamId": "YOUR_TEAM_ID"
-      }
-    }
+    "production": {}
   }
 }
