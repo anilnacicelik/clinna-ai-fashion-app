@@ -11,19 +11,20 @@
       },
       "env": {
         "EXPO_PUBLIC_BACKEND_URL": "https://clinna-ai-fashion-app-production.up.railway.app",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://jtogejbwzqjkekrdjdnw.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_XPX3alGaypKl8nSfubdJGA_d59Uddit"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://elayyixoxfdtvnmkjaep.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsYXl5aXhveGZkdHZubWtqYWVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzE4MTgsImV4cCI6MjA5OTM0NzgxOH0.7_hYAYQwrsOvtLXMvzw20xLJxyVIN9tnH4PC3PD19w4"
       }
     },
     "production": {
       "autoIncrement": true,
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
       },
       "env": {
         "EXPO_PUBLIC_BACKEND_URL": "https://clinna-ai-fashion-app-production.up.railway.app",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://jtogejbwzqjkekrdjdnw.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_XPX3alGaypKl8nSfubdJGA_d59Uddit"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://elayyixoxfdtvnmkjaep.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsYXl5aXhveGZkdHZubWtqYWVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzE4MTgsImV4cCI6MjA5OTM0NzgxOH0.7_hYAYQwrsOvtLXMvzw20xLJxyVIN9tnH4PC3PD19w4"
       }
     }
   },
