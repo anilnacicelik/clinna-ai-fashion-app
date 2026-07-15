@@ -43,7 +43,7 @@ const CREDIT_PRODUCTS: ProductInfo[] = [
     title:    '5 REPORTS',
     subtitle: 'ONE-TIME  ·  $2.00 EACH',
     price:    '$9.99',
-    badge:    'EN POPÜLER',
+    badge:    'MOST POPULAR',
   },
   {
     id:       'clinna_credit_15',
@@ -65,7 +65,7 @@ const PRO_PRODUCTS: ProductInfo[] = [
     title:    'ANNUAL',
     subtitle: 'UNLIMITED DEEP SCANS',
     price:    '$99.99 / YR',
-    badge:    '%44 TASARRUF',
+    badge:    'SAVE 44%',
   },
 ];
 

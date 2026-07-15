@@ -228,7 +228,7 @@ async function handleResponse(res: Response): Promise<ArchiveReport> {
   if (res.status === 429) {
     const after = parseInt(res.headers.get('Retry-After') ?? '30', 10);
     console.warn(`[CLINNA API] 429 Quota — retry after ${after}s`);
-    throw new ApiError(429, `Sistem şu an çok yoğun. ${after}s sonra tekrar dene.`, true, after, 'Gemini rate limit');
+    throw new ApiError(429, strings.common.errors.systemBusy(after), true, after, 'Gemini rate limit');
   }
 
   if (!res.ok) {
@@ -249,7 +249,7 @@ async function handleResponse(res: Response): Promise<ArchiveReport> {
     return data as ArchiveReport;
   } catch (e) {
     console.error('[CLINNA API] JSON parse failed:', e);
-    throw new ApiError(0, 'Sunucudan geçersiz yanıt geldi.', false);
+    throw new ApiError(0, strings.common.errors.invalidResponse, false);
   }
 }
 
