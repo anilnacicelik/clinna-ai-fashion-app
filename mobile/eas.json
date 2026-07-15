@@ -10,10 +10,24 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://clinna-ai-fashion-app-production.up.railway.app",
+        "EXPO_PUBLIC_BACKEND_URL": "https://clinna-ai-fashion-app-production.up.railway.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://jtogejbwzqjkekrdjdnw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_XPX3alGaypKl8nSfubdJGA_d59Uddit"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://clinna-ai-fashion-app-production.up.railway.app",
         "EXPO_PUBLIC_SUPABASE_URL": "https://jtogejbwzqjkekrdjdnw.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_XPX3alGaypKl8nSfubdJGA_d59Uddit"
       }
     }
+  },
+  "submit": {
+    "production": {}
   }
 }

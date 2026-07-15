@@ -153,4 +153,4 @@ Clinna is a production-ready, AI-powered forensic cost and authentication analys
 
 ## Contact
 
-Built by **Naci Çelik** — clinch147258369@gmail.com
+Built by **Naci Çelik**

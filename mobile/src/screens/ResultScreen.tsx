@@ -20,24 +20,15 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { C, F, FS, SP, verdictMeta } from '../theme';
-import { ArchiveReport, PreviewReport } from '../services/api';
+import { ArchiveReport } from '../services/api';
 import { uploadScanImage } from '../services/storageUpload';
 import { supabase } from '../services/supabase';
-import { useScansLeft } from '../hooks/useScansLeft';
 
 const { width } = Dimensions.get('window');
 
 type Nav   = NativeStackNavigationProp<RootStackParamList, 'Result'>;
 type Route = RouteProp<RootStackParamList, 'Result'>;
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-
-// ─── Risk badge helper (PreviewReport.risk_score → display) ──────
-
-function riskMeta(score: number): { label: string; color: string } {
-  if (score <= 33) return { label: '[ LOW RISK ]',    color: '#8BB88B' };
-  if (score <= 66) return { label: '[ MEDIUM RISK ]', color: '#C4B89A' };
-  return                   { label: '[ HIGH RISK ]',  color: '#D4A5A0' };
-}
 
 // ─── AsyncStorage history (offline fallback) ──────────────────────
 
@@ -289,93 +280,6 @@ const SB = StyleSheet.create({
   },
 });
 
-// ─── Locked Overlay (preview mode blur substitute) ───────────────
-
-function LockedOverlay({ onUnlock }: { onUnlock: () => void }) {
-  return (
-    <View style={LO.root}>
-      {/* Silhouette stub rows — gives shape without revealing data */}
-      {[80, 60, 90, 50, 70].map((w, i) => (
-        <View key={i} style={[LO.stubRow, { width: `${w}%` as any }]} />
-      ))}
-      {/* Opaque overlay */}
-      <View style={LO.overlay}>
-        <Text style={LO.lockLabel}>CLINNA  ·  PREMIUM</Text>
-        <Text style={LO.lockSub}>
-          Brand identity, authentication signals,{'\n'}
-          and economics unlock with a full report.
-        </Text>
-        <TouchableOpacity style={LO.btn} onPress={onUnlock} activeOpacity={0.8}>
-          <Text style={LO.btnTxt}>[ UNLOCK FULL REPORT ]</Text>
-          <Text style={LO.btnArrow}>→</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-const LO = StyleSheet.create({
-  root: {
-    position:   'relative',
-    marginTop:  SP.sm,
-    minHeight:  220,
-    overflow:   'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  stubRow: {
-    height:          10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginVertical:  10,
-    marginLeft:      SP.lg,
-    borderRadius:    2,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.88)',
-    alignItems:      'center',
-    justifyContent:  'center',
-    gap:             SP.md,
-    padding:         SP.lg,
-  },
-  lockLabel: {
-    fontFamily:    F.mono,
-    fontSize:      FS.xxs,
-    letterSpacing: 4,
-    color:         C.grey600,
-  },
-  lockSub: {
-    fontFamily:    F.mono,
-    fontSize:      FS.xxs,
-    letterSpacing: 0.5,
-    color:         C.grey600,
-    textAlign:     'center',
-    lineHeight:    18,
-  },
-  btn: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             SP.sm,
-    borderWidth:     1,
-    borderColor:     C.white,
-    paddingVertical: 15,
-    paddingHorizontal: SP.lg,
-    backgroundColor: C.white,
-    marginTop:       SP.xs,
-  },
-  btnTxt: {
-    fontFamily:    F.mono,
-    fontSize:      FS.xxs,
-    letterSpacing: 3,
-    fontWeight:    '700',
-    color:         C.black,
-  },
-  btnArrow: {
-    fontFamily: F.mono,
-    fontSize:   FS.sm,
-    color:      C.black,
-  },
-});
-
 // ═══════════════════════════════════════════════════════════════════
 // Ana Ekran
 // ═══════════════════════════════════════════════════════════════════
@@ -384,23 +288,7 @@ export default function ResultScreen() {
   const navigation = useNavigation<Nav>();
   const route      = useRoute<Route>();
   const insets     = useSafeAreaInsets();
-  const { imageUri, result: r, isMocked = false, previewData } = route.params;
-
-  // Preview mode: explicitly mocked OR user has no entitlement left
-  const { scansLeft, credits, isProActive } = useScansLeft();
-  const hasEntitlement = isProActive || scansLeft > 0 || credits > 0;
-  const isPreviewMode  = isMocked || (!hasEntitlement && !!previewData);
-
-  const preview: PreviewReport = previewData ?? {
-    anomaly_count: 0, risk_score: 0, category: 'unknown',
-    is_fashion_item: true, processing_ms: 0,
-  };
-  const risk = riskMeta(preview.risk_score);
-
-  const handleUnlock = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate('Paywall');
-  };
+  const { imageUri, result: r } = route.params;
 
   const refNumber = useRef(`CLN-${Date.now().toString(36).toUpperCase().slice(-6)}`).current;
   const timestamp = useRef(
@@ -460,78 +348,6 @@ export default function ResultScreen() {
       );
     }
   }, [saveState, imageUri, r, navigation]);
-
-  // ── Preview mode ─────────────────────────────────────────────────
-  if (isPreviewMode) {
-    return (
-      <View style={S.root}>
-        <StatusBar barStyle="light-content" />
-        <View style={[S.header, { paddingTop: insets.top + 14 }]}>
-          <TouchableOpacity onPress={() => navigation.navigate('Home')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text style={S.hBtn}>← HOME</Text>
-          </TouchableOpacity>
-          <Text style={S.hTitle}>PREVIEW</Text>
-          <View style={{ width: 52 }} />
-        </View>
-        <Rule />
-        <ScrollView
-          style={S.scroll}
-          contentContainerStyle={[S.content, { paddingBottom: insets.bottom + SP.xxl }]}
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View style={{ opacity, transform: [{ translateY }] }}>
-
-            {/* Receipt meta */}
-            <View style={S.receiptMeta}>
-              <View>
-                <Text style={S.refNum}>{refNumber}</Text>
-                <Text style={S.ts}>{timestamp}</Text>
-              </View>
-              <Text style={S.badge}>PREVIEW  ·  LIMITED</Text>
-            </View>
-            <Rule />
-
-            {/* Preview info block — always visible */}
-            <View style={PV.block}>
-              {/* Risk badge */}
-              <View style={PV.row}>
-                <Text style={[PV.riskBadge, { color: risk.color, borderColor: risk.color }]}>
-                  {risk.label}
-                </Text>
-                {!!preview.category && preview.category !== 'unknown' && (
-                  <Text style={PV.categoryTag}>{preview.category.toUpperCase()}</Text>
-                )}
-              </View>
-              {/* Anomaly count */}
-              <Text style={PV.anomalyTxt}>
-                [ {preview.anomaly_count} {preview.anomaly_count === 1 ? 'ANOMALY' : 'ANOMALIES'} DETECTED ]
-              </Text>
-            </View>
-            <Rule />
-
-            {/* Image */}
-            <View style={S.imageWrap}>
-              <Image source={{ uri: imageUri }} style={S.image} resizeMode="cover" />
-            </View>
-
-            {/* Locked overlay */}
-            <LockedOverlay onUnlock={handleUnlock} />
-
-            {/* New scan */}
-            <View style={{ height: SP.lg }} />
-            <TouchableOpacity
-              style={S.outlineBtn}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation.navigate('Camera'); }}
-              activeOpacity={0.7}
-            >
-              <Text style={S.outlineBtnTxt}>NEW AUTHENTICATION →</Text>
-            </TouchableOpacity>
-
-          </Animated.View>
-        </ScrollView>
-      </View>
-    );
-  }
 
   // ── Non-fashion guard ────────────────────────────────────────────
   if (!r.is_fashion_item) {
@@ -620,6 +436,9 @@ export default function ResultScreen() {
               No brand mark detected. For authentication, add an interior label or wash-tag photo and run a Deep Scan.
             </Text>
           )}
+          <Text style={S.disclaimerNote}>
+            AI-generated estimate based on visual analysis — not a certified appraisal or guarantee of authenticity.
+          </Text>
           <Rule />
 
           {/* Evidence */}
@@ -725,6 +544,7 @@ const S = StyleSheet.create({
 
   textureNote:     { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, lineHeight: 18, paddingBottom: SP.md, letterSpacing: 0.2 },
   unverifiedNote:  { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, lineHeight: 18, paddingTop: SP.sm, paddingBottom: SP.md, letterSpacing: 0.3 },
+  disclaimerNote:  { fontFamily: F.mono, fontSize: 9, color: C.grey600, opacity: 0.5, lineHeight: 14, paddingTop: SP.xs, paddingBottom: SP.md, letterSpacing: 0.3 },
 
   footer:    { paddingVertical: SP.lg, alignItems: 'center' },
   footerTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey600 },
@@ -735,44 +555,4 @@ const S = StyleSheet.create({
 
   outlineBtn:    { borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', paddingVertical: 17, paddingHorizontal: SP.lg, flexDirection: 'row', justifyContent: 'center' },
   outlineBtnTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
-});
-
-// ─── Preview mode styles ──────────────────────────────────────────
-const PV = StyleSheet.create({
-  block: {
-    paddingVertical: SP.lg,
-    gap:             SP.sm,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           SP.md,
-    flexWrap:      'wrap',
-  },
-  riskBadge: {
-    fontFamily:       F.mono,
-    fontSize:         FS.xs,
-    letterSpacing:    2.5,
-    fontWeight:       '700',
-    borderWidth:      1,
-    paddingVertical:  5,
-    paddingHorizontal: SP.sm,
-  },
-  categoryTag: {
-    fontFamily:       F.mono,
-    fontSize:         FS.xxs,
-    letterSpacing:    3,
-    color:            C.grey600,
-    borderWidth:      1,
-    borderColor:      'rgba(255,255,255,0.15)',
-    paddingVertical:  5,
-    paddingHorizontal: SP.sm,
-  },
-  anomalyTxt: {
-    fontFamily:    F.mono,
-    fontSize:      FS.xs,
-    letterSpacing: 1.5,
-    color:         C.white,
-    marginTop:     SP.xs,
-  },
 });

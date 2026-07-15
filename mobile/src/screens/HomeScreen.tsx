@@ -6,20 +6,22 @@
  *  - Logout → supabase.auth.signOut()  (Auth Guard handles redirect)
  */
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Animated, StatusBar, Dimensions,
+  Animated, StatusBar, Dimensions, Alert, Linking,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../services/supabase';
+import { deleteAccount } from '../services/api';
 import { useScansLeft } from '../hooks/useScansLeft';
 import { C, F, FS, SP } from '../theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { strings } from '../i18n/strings';
+import { PRIVACY_URL, TERMS_URL } from '../config/legal';
 
 const { width, height } = Dimensions.get('window');
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -30,6 +32,7 @@ export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const insets     = useSafeAreaInsets();
   const { scansLeft, load } = useScansLeft();
+  const [deleting, setDeleting] = useState(false);
 
   // Refresh counter on every focus (stays current when returning from CameraScreen)
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -72,6 +75,44 @@ export default function HomeScreen() {
     } catch (e) {
       console.error('[HomeScreen] signOut error:', e);
     }
+  };
+
+  const handlePrivacyPolicy = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Linking.openURL(PRIVACY_URL).catch(e => console.error('[HomeScreen] openURL (privacy) error:', e));
+  };
+
+  const handleTerms = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Linking.openURL(TERMS_URL).catch(e => console.error('[HomeScreen] openURL (terms) error:', e));
+  };
+
+  const handleDeleteAccount = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      '[ DELETE ACCOUNT ]',
+      'THIS WILL PERMANENTLY DELETE YOUR ACCOUNT, SCAN HISTORY, AND CREDITS. THIS CANNOT BE UNDONE.',
+      [
+        { text: strings.common.cancelBtn, style: 'cancel' },
+        {
+          text: '[ DELETE ]',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await deleteAccount();
+              await supabase.auth.signOut();
+            } catch (e) {
+              console.error('[HomeScreen] deleteAccount error:', e);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert('[ DELETE FAILED ]', 'COULD NOT DELETE ACCOUNT. CHECK YOUR CONNECTION AND TRY AGAIN.', [{ text: strings.common.okBtn }]);
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -121,6 +162,27 @@ export default function HomeScreen() {
         <TouchableOpacity style={S.button} onPress={handleAuthenticate} activeOpacity={0.55}>
           <Text style={S.buttonText}>{strings.home.authenticateBtn}</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={S.deleteAccountBtn}
+          onPress={handleDeleteAccount}
+          activeOpacity={0.55}
+          disabled={deleting}
+          hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+        >
+          <Text style={S.deleteAccountText}>
+            {deleting ? '[ DELETING... ]' : strings.common.deleteAccountBtn}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={S.legalRow}>
+          <TouchableOpacity onPress={handlePrivacyPolicy} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
+            <Text style={S.legalText}>[ PRIVACY POLICY ]</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleTerms} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
+            <Text style={S.legalText}>[ TERMS OF SERVICE ]</Text>
+          </TouchableOpacity>
+        </View>
 
       </Animated.View>
     </View>
@@ -245,5 +307,26 @@ const S = StyleSheet.create({
     fontWeight:    '400',
     letterSpacing: 5,
     color:         'rgba(242, 240, 235, 0.6)',
+  },
+  deleteAccountBtn: {
+    marginTop:  18,
+    alignItems: 'center',
+  },
+  deleteAccountText: {
+    fontFamily:    F.mono,
+    fontSize:      FS.xxs,
+    letterSpacing: 1.5,
+    color:         'rgba(242, 240, 235, 0.22)',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    gap:           SP.md,
+    marginTop:     14,
+  },
+  legalText: {
+    fontFamily:    F.mono,
+    fontSize:      9,
+    letterSpacing: 1,
+    color:         'rgba(242, 240, 235, 0.16)',
   },
 });

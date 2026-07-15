@@ -14,10 +14,11 @@ export const strings = {
   common: {
 
     // Buttons
-    logoutBtn: '[ LOGOUT ]',
-    cancelBtn: '[ CANCEL ]',
-    retryBtn:  '[ RETRY ]',
-    okBtn:     '[ OK ]',
+    logoutBtn:        '[ LOGOUT ]',
+    deleteAccountBtn: '[ DELETE ACCOUNT ]',
+    cancelBtn:        '[ CANCEL ]',
+    retryBtn:         '[ RETRY ]',
+    okBtn:            '[ OK ]',
 
     // Brand wordmark — HomeScreen + AuthScreen
     wordmark: 'Clinna',
@@ -25,15 +26,16 @@ export const strings = {
     // Scan counter badge — HomeScreen + HistoryScreen
     scansLeft: (n: number) => `[ ${n} SCANS LEFT ]`,
 
-    // Network / API errors surfaced to the user
+    // Network / API errors surfaced to the user — kept free of raw
+    // URLs/env var names; technical detail still goes to console.error in api.ts
     // (originate in api.ts; can appear from any screen using the analysis API)
     errors: {
       systemBusy:         (retryAfter: number) => `System is busy. Retry in ${retryAfter}s.`,
       invalidResponse:    'Invalid response from server.',
-      backendUnreachable: (url: string) => `BACKEND UNREACHABLE\n${url}\n→ .env: EXPO_PUBLIC_BACKEND_URL`,
-      requestTimeout:     (url: string) => `REQUEST TIMEOUT — ${url}`,
-      serverError:        (detail: string) => `SERVER ERROR — ${detail}`,
-      unexpected:         (msg: string) => `UNEXPECTED ERROR: ${msg}`,
+      backendUnreachable: 'CANNOT REACH THE SERVER — CHECK YOUR CONNECTION AND TRY AGAIN.',
+      requestTimeout:     'REQUEST TIMED OUT — TRY AGAIN.',
+      serverError:        'SOMETHING WENT WRONG ON OUR END. PLEASE TRY AGAIN.',
+      unexpected:         'AN UNEXPECTED ERROR OCCURRED. PLEASE TRY AGAIN.',
     },
 
   },

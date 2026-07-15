@@ -8,6 +8,9 @@
  * ──────────────────────────────────────────────────────────────
  */
 
+import { supabase } from './supabase';
+import { strings } from '../i18n/strings';
+
 // .env → EXPO_PUBLIC_BACKEND_URL=http://192.168.X.X:8000
 const _envUrl    = (process.env.EXPO_PUBLIC_BACKEND_URL ?? '').replace(/\/$/, '');
 const _fallback  = 'http://192.168.1.111:8000';
@@ -63,13 +66,6 @@ export interface DeepAuthImages {
   label?:  string;
   tag?:    string;
 }
-export interface PreviewReport {
-  anomaly_count:   number;
-  risk_score:      number;   // 0-100 — authentication risk (0=safe, 100=risky)
-  category:        string;
-  is_fashion_item: boolean;
-  processing_ms:   number;
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // ApiError
@@ -94,10 +90,17 @@ export class ApiError extends Error {
 // XMLHttpRequest.timeout sets NSURLSession directly.
 // ═══════════════════════════════════════════════════════════════════
 
+/** Current Supabase session's access token, as an Authorization header (or {} if signed out). */
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+}
+
 function xhrPost(
   url:       string,
   body:      FormData,
   timeoutMs: number,
+  headers:   Record<string, string> = {},
 ): Promise<Response> {
   const startedAt = Date.now();
   console.log(`[CLINNA API] → POST ${url} (XHR timeout=${timeoutMs}ms)`);
@@ -107,6 +110,7 @@ function xhrPost(
     xhr.open('POST', url);
     xhr.responseType = 'text';
     xhr.timeout = timeoutMs; // iOS NSURLSession timeout'unu override eder
+    Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
 
     xhr.onload = () => {
       const elapsed = Date.now() - startedAt;
@@ -128,10 +132,10 @@ function xhrPost(
       console.error(`[CLINNA API] XHR TIMEOUT ${elapsed}ms → ${url}`);
       reject(new ApiError(
         408,
-        `REQUEST TIMEOUT — ${DISPLAY_URL}`,
+        strings.common.errors.requestTimeout,
         true,
         undefined,
-        `XHR timeout (${timeoutMs}ms) — server did not respond`,
+        `XHR timeout (${timeoutMs}ms) — server did not respond — ${url}`,
       ));
     };
 
@@ -143,10 +147,10 @@ function xhrPost(
       console.error(`[CLINNA API] HINT   : .env → EXPO_PUBLIC_BACKEND_URL=http://<LAN_IP>:8000`);
       reject(new ApiError(
         0,
-        `BACKEND UNREACHABLE\n${DISPLAY_URL}\n→ .env: EXPO_PUBLIC_BACKEND_URL`,
+        strings.common.errors.backendUnreachable,
         true,
         undefined,
-        'Network error — check your Wi-Fi connection',
+        `Network error — check your Wi-Fi connection — ${url}`,
       ));
     };
 
@@ -180,10 +184,10 @@ async function fetchWithTimeout(
       console.error(`[CLINNA API] TIMEOUT ${elapsed}ms → ${url}`);
       throw new ApiError(
         408,
-        `REQUEST TIMEOUT — ${DISPLAY_URL}`,
+        strings.common.errors.requestTimeout,
         true,
         undefined,
-        `Timeout (${timeoutMs}ms) — server did not respond`,
+        `Timeout (${timeoutMs}ms) — server did not respond — ${url}`,
       );
     }
 
@@ -206,10 +210,10 @@ async function fetchWithTimeout(
 
     throw new ApiError(
       0,
-      `BACKEND UNREACHABLE\n${DISPLAY_URL}\n→ .env: EXPO_PUBLIC_BACKEND_URL`,
+      strings.common.errors.backendUnreachable,
       true,
       undefined,
-      reason,
+      `${reason} — ${url}`,
     );
   } finally {
     clearTimeout(timerId);
@@ -269,34 +273,13 @@ function uriToFormPart(uri: string): { uri: string; name: string; type: string }
 // Public API
 // ═══════════════════════════════════════════════════════════════════
 
-async function handlePreviewResponse(res: Response): Promise<PreviewReport> {
-  if (res.status === 429) {
-    const after = parseInt(res.headers.get('Retry-After') ?? '30', 10);
-    throw new ApiError(429, `Sistem şu an çok yoğun. ${after}s sonra tekrar dene.`, true, after, 'Gemini rate limit');
-  }
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const j = await res.json();
-      if (j?.detail) detail = String(j.detail);
-    } catch {}
-    throw new ApiError(res.status, `SERVER ERROR — ${detail}`, res.status >= 500);
-  }
-  try {
-    const data = await res.json();
-    return data as PreviewReport;
-  } catch (e) {
-    throw new ApiError(0, 'Sunucudan geçersiz yanıt geldi.', false);
-  }
-}
-
 /** Quick Scan — single image */
 export async function quickScan(imageUri: string): Promise<ArchiveReport> {
   console.log('[CLINNA API] quickScan start');
   const body = new FormData();
   body.append('image', uriToFormPart(imageUri) as any);
 
-  const res = await xhrPost(`${BASE_URL}/analyze`, body, TIMEOUT_QUICK_MS);
+  const res = await xhrPost(`${BASE_URL}/analyze`, body, TIMEOUT_QUICK_MS, await authHeaders());
   return handleResponse(res);
 }
 
@@ -310,17 +293,26 @@ export async function deepAuth(imgs: DeepAuthImages, scanMode: 'deep_auth' | 'ac
   if (imgs.tag)   body.append('image_tag',   uriToFormPart(imgs.tag)   as any);
   body.append('scan_mode', scanMode);
 
-  const res = await xhrPost(`${BASE_URL}/analyze/deep`, body, TIMEOUT_DEEP_MS);
+  const res = await xhrPost(`${BASE_URL}/analyze/deep`, body, TIMEOUT_DEEP_MS, await authHeaders());
   return handleResponse(res);
 }
 
-/** Preview Scan — single image, returns lightweight PreviewReport */
-export async function quickScanPreview(imageUri: string): Promise<PreviewReport> {
-  console.log('[CLINNA API] quickScanPreview start');
-  const body = new FormData();
-  body.append('image', uriToFormPart(imageUri) as any);
-  const res = await xhrPost(`${BASE_URL}/analyze/preview`, body, TIMEOUT_QUICK_MS);
-  return handlePreviewResponse(res);
+/** Permanently deletes the signed-in user's account and all associated data. */
+export async function deleteAccount(): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetchWithTimeout(
+    `${BASE_URL}/account`,
+    { method: 'DELETE', headers },
+    15_000,
+  );
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const j = await res.json();
+      if (j?.detail) detail = String(j.detail);
+    } catch {}
+    throw new ApiError(res.status, `ACCOUNT DELETION FAILED — ${detail}`, res.status >= 500);
+  }
 }
 
 /** Health check — is the backend reachable? */

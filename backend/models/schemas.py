@@ -36,16 +36,6 @@ class Financials(BaseModel):
     current_resell_market_value: str = ""
 
 
-# ── Preview response (lightweight pre-scan) ──────────────────────
-
-class PreviewReport(BaseModel):
-    anomaly_count:   int  = 0
-    risk_score:      int  = Field(0, ge=0, le=100)
-    category:        str  = ""
-    is_fashion_item: bool = True
-    processing_ms:   int  = 0
-
-
 # ── Top-level response ────────────────────────────────────────────
 
 class ArchiveReport(BaseModel):

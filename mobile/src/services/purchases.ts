@@ -1,6 +1,11 @@
 /**
  * CLINNA — RevenueCat Purchases Service
- * Wraps react-native-purchases SDK; syncs outcomes to Supabase profiles.
+ * Wraps react-native-purchases SDK. Entitlements (credits/is_pro) are granted
+ * server-side by backend/routers/webhooks.py via the RevenueCat webhook —
+ * the client has no write access to those columns (see
+ * mobile/services/security_hardening_migration.sql). This avoids a client
+ * being able to self-grant credits/pro by calling Supabase directly with a
+ * forged value.
  */
 
 import Purchases, {
@@ -8,16 +13,8 @@ import Purchases, {
   PurchasesPackage,
   CustomerInfo,
 } from 'react-native-purchases';
-import { supabase } from './supabase';
 
 const API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ?? '';
-
-// Credit pack product ID → how many credits to add
-const CREDIT_AMOUNTS: Record<string, number> = {
-  clinna_credit_1:  1,
-  clinna_credit_5:  5,
-  clinna_credit_15: 15,
-};
 
 // ─── Setup ────────────────────────────────────────────────────────
 
@@ -60,69 +57,17 @@ export function findPackage(
 
 export async function purchasePackage(pkg: PurchasesPackage): Promise<CustomerInfo> {
   const { customerInfo } = await Purchases.purchasePackage(pkg);
-  await _syncPurchaseToSupabase(pkg.product.identifier);
+  // Entitlement grant happens server-side via the RevenueCat webhook.
+  // Callers should re-poll useScansLeft().load() a couple of times with a
+  // short delay to pick up the update once the webhook lands.
   return customerInfo;
 }
 
 export async function restorePurchases(): Promise<CustomerInfo> {
-  const info = await Purchases.restorePurchases();
-  await _syncRestoreToSupabase(info);
-  return info;
+  return Purchases.restorePurchases();
 }
 
 export async function checkSubscriptionStatus(): Promise<boolean> {
   const info = await Purchases.getCustomerInfo();
   return info.activeSubscriptions.length > 0;
-}
-
-// ─── Supabase sync ────────────────────────────────────────────────
-
-async function _syncPurchaseToSupabase(productId: string): Promise<void> {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
-
-    const creditAmount = CREDIT_AMOUNTS[productId];
-
-    if (creditAmount != null) {
-      // Credit pack — read current credits then increment
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('credits')
-        .eq('id', session.user.id)
-        .single();
-
-      await supabase
-        .from('profiles')
-        .update({ credits: (profile?.credits ?? 0) + creditAmount })
-        .eq('id', session.user.id);
-    } else {
-      // Pro subscription — set expiry based on period
-      const days      = productId === 'clinna_pro_annual' ? 365 : 30;
-      const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-      await supabase
-        .from('profiles')
-        .update({ is_pro: true, pro_expires_at: expiresAt })
-        .eq('id', session.user.id);
-    }
-  } catch (e) {
-    console.error('[CLINNA Purchases] Supabase purchase sync error:', e);
-  }
-}
-
-async function _syncRestoreToSupabase(info: CustomerInfo): Promise<void> {
-  try {
-    if (!info.activeSubscriptions.length) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
-
-    // Restore: extend 30 days from now as a conservative sync
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    await supabase
-      .from('profiles')
-      .update({ is_pro: true, pro_expires_at: expiresAt })
-      .eq('id', session.user.id);
-  } catch (e) {
-    console.error('[CLINNA Purchases] Supabase restore sync error:', e);
-  }
 }

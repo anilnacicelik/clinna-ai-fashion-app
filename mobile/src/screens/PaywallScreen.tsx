@@ -96,13 +96,23 @@ export default function PaywallScreen() {
     setSelectedId(prev => (prev === id ? null : id));
   };
 
+  // Entitlements are granted server-side by the RevenueCat webhook, which can
+  // land a second or two after the purchase call returns — poll briefly so
+  // the UI reflects the new credits/pro status before navigating back.
+  const pollEntitlement = async () => {
+    for (let i = 0; i < 4; i++) {
+      await reloadEntitlement();
+      await new Promise(r => setTimeout(r, 1200));
+    }
+  };
+
   const handlePurchase = async () => {
     if (!selectedId || loading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const ok = await purchase(selectedId);
     if (ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await reloadEntitlement();
+      pollEntitlement();
       navigation.goBack();
     }
   };
@@ -113,7 +123,7 @@ export default function PaywallScreen() {
     const hadSub = await restore();
     if (hadSub) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await reloadEntitlement();
+      pollEntitlement();
       navigation.goBack();
     }
   };

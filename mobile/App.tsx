@@ -3,6 +3,7 @@
  * expo-font ile Great Vibes calligraphic script yüklenir.
  * Font yüklenene kadar SplashScreen bekletilir — "CLINNA" ilk frame'de doğru render edilir.
  */
+import 'react-native-url-polyfill/auto';
 import 'react-native-gesture-handler';
 import React, { useCallback } from 'react';
 import { View } from 'react-native';

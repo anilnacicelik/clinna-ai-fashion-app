@@ -3,7 +3,7 @@ CLINNA AI — Vision Service v6
 Changes v5 → v6:
   - Fashion pre-check (vision_is_fashion_quick) removed — Master Plan 01
   - Single, direct Gemini call: vision_analyze_multi
-  - asyncio.wait_for (GEMINI_TIMEOUT=28s) preserved — well under iOS 75s limit
+  - asyncio.wait_for (GEMINI_TIMEOUT=40s) preserved — well under iOS 75s limit
 """
 import json
 import os
