@@ -45,7 +45,7 @@ export const strings = {
 
   auth: {
     wordmark:          'Clinna',
-    tagline:           'ARCHIVE AUTHENTICATION ENGINE',
+    tagline:           'ARCHIVE ANALYSIS ENGINE',
 
     tabSignIn:         'SIGN IN',
     createAccount:     'CREATE ACCOUNT',   // tab label + primary CTA for signup mode
@@ -72,13 +72,16 @@ export const strings = {
     infoFmt:           (msg: string) => `[ ${msg} ]`,
   },
   home: {
-    subtitle:        'ARCHIVE · AUTHENTICATE · VALUE',
+    subtitle:        'ARCHIVE · ANALYZE · VALUE',
     historyBtn:      'ARCHIVE HISTORY',
-    authenticateBtn: 'AUTHENTICATE',
+    analyzeBtn:      'ANALYZE',
   },
   camera: {
     hintBeforeCapture: 'Fit the full garment in frame · no other objects',
     hintAfterCapture:  'Full garment in frame? Retake if cut off.',
+    syncIssueTitle:    '[ SYNC ISSUE ]',
+    syncIssueScan:     'YOUR SCAN COUNT COULD NOT BE UPDATED. CHECK YOUR CONNECTION — YOUR REPORT IS STILL READY.',
+    syncIssueCredit:   'YOUR CREDIT COULD NOT BE DEDUCTED. CHECK YOUR CONNECTION — YOUR REPORT IS STILL READY.',
   },
   result:  {},
   history: {},

@@ -1,9 +1,9 @@
 /**
- * CLINNA — CameraScreen v7
+ * CLINNA — CameraScreen v8
  *
- * FIX 1 — Deep Auth step 3 button:
+ * FIX 1 — Detailed mode step 3 button:
  *   deepActionShown state added. Without explicitly calling showActionBar()
- *   the shutter bar stays open and AUTHENTICATE does not appear.
+ *   the shutter bar stays open and ANALYZE does not appear.
  *
  * FIX 2 — API Error:
  *   StatusBanner brutalist red style, full error message display.
@@ -11,14 +11,15 @@
  *
  * FIX 3 — Dynamic Scan Counter:
  *   Counter is read via the useScansLeft hook.
- *   If scansLeft === 0, pressing AUTHENTICATE shows [ ERROR: NO SCANS LEFT ] Alert.
- *   On successful scan, decrement() is called.
+ *   If scansLeft === 0, pressing ANALYZE navigates to Paywall.
+ *   On successful scan, decrement()/useCredit() is awaited and any
+ *   sync failure is surfaced to the user (not silently swallowed).
  */
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  Animated, StatusBar, Dimensions,
+  Animated, StatusBar, Dimensions, Alert,
 } from 'react-native';
 import { CameraView, CameraType, FlashMode, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -104,9 +105,9 @@ const PHRASES = [
   '[ ARCHIVE ANALYSIS IN PROGRESS...\nEXAMINING DETAILS ]',
   '[ CROSS-REFERENCING LABEL TYPOGRAPHY ]',
   '[ ESTIMATING PRODUCTION COST ]',
-  '[ VERIFYING HARDWARE SIGNATURES ]',
-  '[ CONSULTING RESELL MARKET DATA ]',
-  '[ COMPILING AUTHENTICATION REPORT ]',
+  '[ EXAMINING HARDWARE SIGNATURES ]',
+  '[ CROSS-REFERENCING RETAIL PRICING ]',
+  '[ COMPILING ANALYSIS REPORT ]',
 ] as const;
 
 function AnalyzingOverlay({ visible }: { visible: boolean }) {
@@ -223,9 +224,9 @@ const CB = StyleSheet.create({
 // ═══════════════════════════════════════════════════════════════════
 
 const MODES: { key: ScanMode; label: string }[] = [
-  { key: 'quick_scan', label: 'QUICK' },
-  { key: 'deep_auth',  label: 'DEEP'  },
-  { key: 'acc',        label: 'ACC'   },
+  { key: 'quick_scan', label: 'QUICK'     },
+  { key: 'deep_auth',  label: 'DETAILED'  },
+  { key: 'acc',        label: 'ACCESSORY' },
 ];
 
 function ModeBar({ mode, onChange }: { mode: ScanMode; onChange: (m: ScanMode) => void }) {
@@ -388,21 +389,40 @@ export default function CameraScreen() {
   // Entitlement state
   const { scansLeft, credits, isProActive, decrement, useCredit } = useScansLeft();
 
-  // Which currency was decided at the moment AUTHENTICATE was pressed
+  // Which currency was decided at the moment ANALYZE was pressed
   const entitlementMethodRef = useRef<'decrement' | 'useCredit' | 'pro' | null>(null);
 
   // ── Navigate on success + deduct correct entitlement ─────────
   useEffect(() => {
     if (state.status === 'success') {
       hap.success(); playSFX('success');
-      // Deduct the currency that was chosen when scan started
-      if (entitlementMethodRef.current === 'decrement') decrement();
-      else if (entitlementMethodRef.current === 'useCredit') useCredit();
-      // 'pro' → no deduction needed
+      const method = entitlementMethodRef.current;
       entitlementMethodRef.current = null;
+
+      // Navigate immediately — the report is ready, don't make the user
+      // wait on the entitlement sync round-trip to see it.
       const preview = mode === 'quick_scan' ? capturedUri : deepUris[0];
       navigation.replace('Result', { imageUri: preview!, result: state.data });
       reset();
+
+      // Deduct the currency that was chosen when scan started. null means
+      // the RPC itself failed (not "0 left") — tell the user rather than
+      // failing silently; the alert surfaces on top of whatever screen is
+      // visible by the time the await resolves.
+      (async () => {
+        if (method === 'decrement') {
+          const result = await decrement();
+          if (result === null) {
+            Alert.alert(strings.camera.syncIssueTitle, strings.camera.syncIssueScan, [{ text: strings.common.okBtn }]);
+          }
+        } else if (method === 'useCredit') {
+          const result = await useCredit();
+          if (result === null) {
+            Alert.alert(strings.camera.syncIssueTitle, strings.camera.syncIssueCredit, [{ text: strings.common.okBtn }]);
+          }
+        }
+        // 'pro' → no deduction needed
+      })();
     }
   }, [state.status]);
 
@@ -610,7 +630,7 @@ export default function CameraScreen() {
             <Text style={S.topBtn}>BACK</Text>
           </TouchableOpacity>
           <Text style={S.topLabel}>
-            {isMultiMode && !isPreview ? stepInfo.title : mode === 'quick_scan' ? 'QUICK SCAN' : mode === 'acc' ? 'ACC' : 'DEEP AUTH'}
+            {isMultiMode && !isPreview ? stepInfo.title : mode === 'quick_scan' ? 'QUICK' : mode === 'acc' ? 'ACCESSORY' : 'DETAILED'}
           </Text>
           {!capturedUri ? (
             <TouchableOpacity onPress={toggleFacing} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
@@ -678,12 +698,12 @@ export default function CameraScreen() {
           />
         )}
 
-        {/* Authenticate action bar */}
+        {/* Analyze action bar */}
         {showAction && (
           <Animated.View style={{ transform: [{ translateY: actionSlide }], opacity: actionFade }}>
             {mode === 'quick_scan' ? (
               <>
-                <Text style={S.readyLabel}>READY TO AUTHENTICATE</Text>
+                <Text style={S.readyLabel}>READY TO ANALYZE</Text>
                 <Text style={S.readyHint}>{strings.camera.hintAfterCapture}</Text>
               </>
             ) : (
@@ -697,8 +717,8 @@ export default function CameraScreen() {
             >
               <Text style={[S.authBtnTxt, (isLoading || isQuota) && S.authBtnTxtDim]}>
                 {isLoading
-                  ? (mode === 'deep_auth' ? 'DEEP ANALYSIS IN PROGRESS' : 'ANALYSING')
-                  : 'AUTHENTICATE'}
+                  ? (mode === 'deep_auth' ? 'DETAILED ANALYSIS IN PROGRESS' : 'ANALYSING')
+                  : 'ANALYZE'}
               </Text>
               {!isLoading && <Text style={S.authBtnArrow}>→</Text>}
             </TouchableOpacity>

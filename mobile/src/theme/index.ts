@@ -91,24 +91,6 @@ export const Shadow = {
   },
 };
 
-// Verdict → visual mapping
-export const VerdictConfig = {
-  AUTHENTIC: {
-    color:  Colors.authentic,
-    label:  'AUTHENTIC',
-    symbol: '✦',
-  },
-  FAKE: {
-    color:  Colors.fake,
-    label:  'COUNTERFEIT',
-    symbol: '✕',
-  },
-  UNCERTAIN: {
-    color:  Colors.uncertain,
-    label:  'UNCERTAIN',
-    symbol: '◌',
-  },
-} as const;
 // --- FULL THEME PACKAGE FOR SILENT LUXURY SCREENS ---
 
 export const C = {
@@ -148,11 +130,3 @@ export const SP = {
   xxl: 48
 }; // <-- The missing bracket
 
-// --- AI VERDICT ENGINE ---
-export const verdictMeta = (score: number) => {
-  if (score < 0)   return { color: '#888888', text: 'UNVERIFIED',  label: 'UNVERIFIED',  glyph: '—' };
-  if (score >= 85) return { color: '#FFFFFF', text: 'AUTHENTIC',   label: 'AUTHENTIC',   glyph: '✓' };
-  if (score >= 60) return { color: '#C8D5B9', text: 'LIKELY',      label: 'LIKELY',      glyph: '~' };
-  if (score >= 40) return { color: '#888888', text: 'UNCERTAIN',   label: 'UNCERTAIN',   glyph: '?' };
-                   return { color: '#FF3B30', text: 'INAUTHENTIC', label: 'INAUTHENTIC', glyph: '×' };
-};

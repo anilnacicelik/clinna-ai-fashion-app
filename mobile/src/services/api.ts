@@ -41,13 +41,17 @@ export interface FabricEstimate {
   texture_notes: string;
 }
 export interface Authenticity {
-  legit_probability_score: number;  // -1 = not verifiable (UNKNOWN brand); 0-100 = real score
-  signals:                 string[];
+  // Observable construction signals only — CLINNA never scores authenticity.
+  signals: string[];
 }
 export interface Financials {
-  estimated_production_cost:   string;
-  brand_premium:               string;
-  current_resell_market_value: string;
+  material_cost_usd:           number;
+  labor_cost_usd:               number;
+  total_production_cost_usd:    number;
+  confidence:                   'low' | 'medium' | 'high';
+  reasoning:                     string;
+  estimated_retail_price_usd:  number | null;  // null unless brand is confirmed
+  brand_markup:                 number | null;  // null unless brand is confirmed
 }
 export interface ArchiveReport {
   archive_id:      ArchiveId;

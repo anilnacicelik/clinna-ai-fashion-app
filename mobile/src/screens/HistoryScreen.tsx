@@ -37,15 +37,6 @@ interface ScanRecord {
   image_url:       string | null;
 }
 
-// ─── Helper: score → color ───────────────────────────────────────
-
-function scoreColor(score: number | null): string {
-  if (score === null) return 'rgba(255,255,255,0.25)';
-  if (score >= 75)   return 'rgba(180,210,160,0.9)';
-  if (score >= 45)   return 'rgba(210,190,140,0.9)';
-  return                    'rgba(210,140,140,0.9)';
-}
-
 // ─── Date format ─────────────────────────────────────────────────
 
 function formatDate(iso: string): string {
@@ -57,8 +48,6 @@ function formatDate(iso: string): string {
 // ─── Single scan row ─────────────────────────────────────────────
 
 function ScanRow({ item, onLongPress }: { item: ScanRecord; onLongPress: () => void }) {
-  const col = scoreColor(item.legit_score);
-
   return (
     <TouchableOpacity
       onLongPress={onLongPress}
@@ -95,14 +84,6 @@ function ScanRow({ item, onLongPress }: { item: ScanRecord; onLongPress: () => v
             {formatDate(item.created_at)}
             {item.scan_mode ? `  ·  ${item.scan_mode.replace('_', ' ').toUpperCase()}` : ''}
           </Text>
-        </View>
-
-        {/* Score badge */}
-        <View style={ROW.scoreBlock}>
-          <Text style={[ROW.score, { color: col }]}>
-            {item.legit_score !== null ? item.legit_score : '—'}
-          </Text>
-          <Text style={ROW.scoreLabel}>/100</Text>
         </View>
 
       </View>
@@ -166,19 +147,6 @@ const ROW = StyleSheet.create({
     letterSpacing: 1,
     marginTop:     2,
   },
-  scoreBlock: { alignItems: 'flex-end', flexShrink: 0 },
-  score: {
-    fontFamily: F.mono,
-    fontSize:   22,
-    fontWeight: '200',
-    lineHeight: 26,
-  },
-  scoreLabel: {
-    fontFamily:    F.mono,
-    fontSize:      8,
-    color:         C.grey600,
-    letterSpacing: 1,
-  },
 });
 
 // ─── Separator ───────────────────────────────────────────────────
@@ -194,7 +162,7 @@ function EmptyState() {
     <View style={EMPTY.root}>
       <Text style={EMPTY.symbol}>◎</Text>
       <Text style={EMPTY.title}>NO SCANS YET</Text>
-      <Text style={EMPTY.sub}>{'Authenticate your first piece\nto begin your archive.'}</Text>
+      <Text style={EMPTY.sub}>{'Analyze your first piece\nto begin your archive.'}</Text>
     </View>
   );
 }

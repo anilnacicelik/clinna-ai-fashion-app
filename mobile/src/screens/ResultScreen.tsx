@@ -1,25 +1,28 @@
 /**
- * CLINNA — ResultScreen v6  "Authentication Receipt"
+ * CLINNA — ResultScreen v7  "Analysis Receipt"
  *
- * v6 changes:
- *   - "SAVE TO ARCHIVE" button added — storageUpload + Supabase insert
- *   - Save state: idle → saving → saved | error
- *   - On save success → navigate to History screen
- *   - All existing design (brutalist, 1px lines, monospace) preserved
+ * v7 changes:
+ *   - Authenticity score removed entirely (legal risk) — replaced with a
+ *     plain "OBSERVED SIGNALS" list of construction observations only.
+ *   - Production cost breakdown is now always shown, independent of brand.
+ *   - Shareable cost card: captures a hidden brutalist 1080x1920 card
+ *     (product photo + cost breakdown + watermark) and shares it as a PNG.
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  ScrollView, Animated, StatusBar, Dimensions, Share, Alert,
+  ScrollView, Animated, StatusBar, Dimensions, Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import * as Sharing from 'expo-sharing';
+import { captureRef } from 'react-native-view-shot';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { C, F, FS, SP, verdictMeta } from '../theme';
+import { C, F, FS, SP } from '../theme';
 import { ArchiveReport } from '../services/api';
 import { uploadScanImage } from '../services/storageUpload';
 import { supabase } from '../services/supabase';
@@ -28,7 +31,20 @@ const { width } = Dimensions.get('window');
 
 type Nav   = NativeStackNavigationProp<RootStackParamList, 'Result'>;
 type Route = RouteProp<RootStackParamList, 'Result'>;
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+type SaveState  = 'idle' | 'saving' | 'saved' | 'error';
+type ShareState = 'idle' | 'preparing';
+
+// ─── Formatting helpers ─────────────────────────────────────────────
+
+function formatUsd(n: number): string {
+  return `$${Math.round(n).toLocaleString('en-US')}`;
+}
+
+function modeLabel(mode: ArchiveReport['scan_mode']): string {
+  if (mode === 'deep_auth') return 'DETAILED';
+  if (mode === 'acc')       return 'ACCESSORY';
+  return 'QUICK';
+}
 
 // ─── AsyncStorage history (offline fallback) ──────────────────────
 
@@ -54,8 +70,6 @@ async function saveToArchive(
       brand:           report.archive_id.brand           || null,
       collection_year: report.archive_id.collection_year || null,
       model_name:      report.archive_id.model_name      || null,
-      legit_score:     report.authenticity.legit_probability_score,
-      resell_value:    report.financials.current_resell_market_value || null,
       scan_mode:       report.scan_mode                  || 'quick_scan',
     })
     .select('id')
@@ -72,30 +86,6 @@ async function saveToArchive(
   await uploadScanImage(imageUri, scanId);
 
   return scanId;
-}
-
-// ─── Share text ───────────────────────────────────────────────────
-
-function buildShareText(r: ArchiveReport, ref: string): string {
-  const vm = verdictMeta(r.authenticity.legit_probability_score);
-  return [
-    '─────────────────────────',
-    'CLINNA  AUTHENTICATION RECEIPT',
-    `REF  ${ref}`,
-    '─────────────────────────',
-    `BRAND    ${r.archive_id.brand           || '—'}`,
-    `ERA      ${r.archive_id.collection_year || '—'}`,
-    `MODEL    ${r.archive_id.model_name      || '—'}`,
-    '',
-    `VERDICT  ${vm.label}  ${vm.glyph}`,
-    `SCORE    ${r.authenticity.legit_probability_score} / 100`,
-    '',
-    ...r.authenticity.signals.slice(0, 3).map(s => `  · ${s}`),
-    '',
-    `RESELL   ${r.financials.current_resell_market_value || '—'}`,
-    '─────────────────────────',
-    '#ClinnaAI  #ArchiveFashion  #LegitCheck',
-  ].join('\n');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -117,46 +107,6 @@ function SHead({ title }: { title: string }) {
     </View>
   );
 }
-
-// ─── Score Block ──────────────────────────────────────────────────
-
-function ScoreBlock({ score }: { score: number }) {
-  const unverified = score < 0;
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (!unverified) {
-      Animated.timing(anim, { toValue: score / 100, duration: 1600, delay: 300, useNativeDriver: false }).start();
-    }
-  }, [score]);
-  const barWidth = anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
-  const vm = verdictMeta(score);
-  return (
-    <View style={SC.root}>
-      <View style={SC.row}>
-        <Text style={SC.num}>{unverified ? '—' : score}</Text>
-        <View style={SC.meta}>
-          {!unverified && <Text style={SC.outOf}>/100</Text>}
-          <Text style={[SC.verdict, { color: vm.color }]}>{vm.label}</Text>
-        </View>
-        <Text style={SC.glyph}>{vm.glyph}</Text>
-      </View>
-      <View style={SC.track}>
-        {!unverified && <Animated.View style={[SC.fill, { width: barWidth }]} />}
-      </View>
-    </View>
-  );
-}
-const SC = StyleSheet.create({
-  root:  { paddingVertical: SP.md },
-  row:   { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 14 },
-  num:   { fontFamily: F.mono, fontSize: 72, fontWeight: '100', color: C.white, lineHeight: 76 },
-  meta:  { flex: 1, gap: 5, paddingBottom: 8 },
-  outOf: { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, letterSpacing: 1 },
-  verdict: { fontFamily: F.mono, fontSize: FS.xs, letterSpacing: 3.5, fontWeight: '600' },
-  glyph:   { fontFamily: F.mono, fontSize: 30, color: C.grey400, paddingBottom: 6 },
-  track:   { height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
-  fill:    { height: '100%', backgroundColor: C.white },
-});
 
 // ─── Signals ──────────────────────────────────────────────────────
 
@@ -198,6 +148,33 @@ const EC = StyleSheet.create({
   lbl:   { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
   val:   { fontFamily: F.mono, fontSize: FS.sm, color: C.white },
   valHL: { fontFamily: F.mono, fontSize: FS.sm, color: C.white, fontWeight: '700' },
+});
+
+// ─── Cost breakdown bar ─────────────────────────────────────────────
+
+function CostBar({ material, labor }: { material: number; labor: number }) {
+  const total   = material + labor;
+  const matPct  = total > 0 ? material / total : 0.5;
+  const laborPct = 1 - matPct;
+  return (
+    <View style={CBV.root}>
+      <View style={CBV.track}>
+        <View style={[CBV.seg, { flex: Math.max(matPct, 0.02), backgroundColor: 'rgba(255,255,255,0.7)' }]} />
+        <View style={[CBV.seg, { flex: Math.max(laborPct, 0.02), backgroundColor: 'rgba(255,255,255,0.25)' }]} />
+      </View>
+      <View style={CBV.labelRow}>
+        <Text style={CBV.label}>MATERIAL {Math.round(matPct * 100)}%</Text>
+        <Text style={CBV.label}>LABOR {Math.round(laborPct * 100)}%</Text>
+      </View>
+    </View>
+  );
+}
+const CBV = StyleSheet.create({
+  root:     { paddingVertical: 12, gap: 8 },
+  track:    { flexDirection: 'row', height: 6, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },
+  seg:      { height: '100%' },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  label:    { fontFamily: F.mono, fontSize: 9, letterSpacing: 1.5, color: C.grey600 },
 });
 
 // ─── ColorRow ─────────────────────────────────────────────────────
@@ -280,6 +257,51 @@ const SB = StyleSheet.create({
   },
 });
 
+// ─── Shareable cost card (hidden, captured as PNG) ────────────────
+// Rendered at 360x640 (9:16) and captured at exactly 3x → 1080x1920.
+
+const CARD_W = 360;
+const CARD_H = 640;
+
+const ShareCard = React.forwardRef<View, { imageUri: string; r: ArchiveReport }>(
+  ({ imageUri, r }, ref) => {
+    const f = r.financials;
+    return (
+      <View ref={ref} collapsable={false} style={SCV.root}>
+        <Image source={{ uri: imageUri }} style={SCV.image} resizeMode="cover" />
+        <View style={SCV.body}>
+          <Text style={SCV.costLine}>[ PRODUCTION COST: {formatUsd(f.total_production_cost_usd)} ]</Text>
+          {f.estimated_retail_price_usd != null && (
+            <Text style={SCV.subLine}>[ RETAIL: {formatUsd(f.estimated_retail_price_usd)} ]</Text>
+          )}
+          {f.brand_markup != null && (
+            <Text style={SCV.subLine}>[ MARKUP: {f.brand_markup.toFixed(1)}x ]</Text>
+          )}
+          <CostBar material={f.material_cost_usd} labor={f.labor_cost_usd} />
+        </View>
+        <View style={SCV.footer}>
+          <Text style={SCV.watermark}>CLINNA</Text>
+          <Text style={SCV.watermarkSub}>clinna.app</Text>
+        </View>
+      </View>
+    );
+  },
+);
+
+const SCV = StyleSheet.create({
+  root:  { width: CARD_W, height: CARD_H, backgroundColor: C.black },
+  image: { width: CARD_W, height: CARD_H * 0.5 },
+  body:  { paddingHorizontal: 20, paddingTop: 20, gap: 6 },
+  costLine: { fontFamily: F.mono, fontSize: 17, fontWeight: '700', letterSpacing: 1, color: C.white },
+  subLine:  { fontFamily: F.mono, fontSize: 13, letterSpacing: 1, color: C.grey400 },
+  footer: {
+    position: 'absolute', bottom: 20, left: 20, right: 20,
+    alignItems: 'center', gap: 2,
+  },
+  watermark:    { fontFamily: 'MissFajardose', fontSize: 30, color: '#F2F0EB' },
+  watermarkSub: { fontFamily: F.mono, fontSize: 10, letterSpacing: 3, color: C.grey600 },
+});
+
 // ═══════════════════════════════════════════════════════════════════
 // Ana Ekran
 // ═══════════════════════════════════════════════════════════════════
@@ -300,6 +322,8 @@ export default function ResultScreen() {
 
   // Save state
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [shareState, setShareState] = useState<ShareState>('idle');
+  const cardRef = useRef<View>(null);
 
   useEffect(() => {
     // Offline local save — always runs
@@ -311,14 +335,36 @@ export default function ResultScreen() {
     ]).start();
   }, []);
 
-  // ── Share ────────────────────────────────────────────────────────
+  // ── Share — capture the hidden cost card and share as PNG ────────
   const handleShare = useCallback(async () => {
+    if (shareState === 'preparing') return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await Share.share({
-      message: buildShareText(r, refNumber),
-      title:   `CLINNA · ${r.archive_id.brand || 'Archive Report'}`,
-    });
-  }, [r, refNumber]);
+    setShareState('preparing');
+    try {
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        Alert.alert('[ SHARE UNAVAILABLE ]', '[ SHARING IS NOT SUPPORTED ON THIS DEVICE ]', [{ text: '[ OK ]' }]);
+        return;
+      }
+      const uri = await captureRef(cardRef, {
+        format: 'png',
+        quality: 1,
+        width:  1080,
+        height: 1920,
+        result: 'tmpfile',
+      });
+      await Sharing.shareAsync(uri, {
+        mimeType:    'image/png',
+        dialogTitle: `CLINNA · ${r.archive_id.brand || 'Cost Report'}`,
+        UTI:         'public.png',
+      });
+    } catch (err) {
+      console.error('[ResultScreen] share error:', err);
+      Alert.alert('[ SHARE FAILED ]', '[ COULD NOT GENERATE SHARE CARD — TRY AGAIN ]', [{ text: '[ OK ]' }]);
+    } finally {
+      setShareState('idle');
+    }
+  }, [r, shareState]);
 
   // ── Save To Archive ──────────────────────────────────────────────
   const handleSave = useCallback(async () => {
@@ -374,7 +420,8 @@ export default function ResultScreen() {
     );
   }
 
-  const score = r.authenticity.legit_probability_score;
+  const brandUnknown = !r.archive_id.brand || r.archive_id.brand.toUpperCase() === 'UNKNOWN';
+  const f = r.financials;
 
   return (
     <View style={S.root}>
@@ -389,8 +436,8 @@ export default function ResultScreen() {
           <Text style={S.hBtn}>← HOME</Text>
         </TouchableOpacity>
         <Text style={S.hTitle}>RECEIPT</Text>
-        <TouchableOpacity onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={S.hBtn}>SHARE ↑</Text>
+        <TouchableOpacity onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} disabled={shareState === 'preparing'}>
+          <Text style={S.hBtn}>{shareState === 'preparing' ? '...' : 'SHARE ↑'}</Text>
         </TouchableOpacity>
       </View>
       <Rule />
@@ -409,7 +456,7 @@ export default function ResultScreen() {
               <Text style={S.ts}>{timestamp}</Text>
             </View>
             <Text style={S.badge}>
-              {r.scan_mode === 'deep_auth' ? 'DEEP AUTH' : 'QUICK SCAN'}  ·  {r.image_count}F
+              {modeLabel(r.scan_mode)}  ·  {r.image_count}F
             </Text>
           </View>
           <Rule />
@@ -428,27 +475,18 @@ export default function ResultScreen() {
           </View>
           <Rule />
 
-          {/* Authentication */}
-          <SHead title="AUTHENTICATION" />
-          <ScoreBlock score={score} />
-          {score < 0 && (
+          {/* Observed Signals */}
+          <SHead title="OBSERVED SIGNALS" />
+          <Signals signals={r.authenticity.signals} />
+          {brandUnknown && (
             <Text style={S.unverifiedNote}>
-              No brand mark detected. For authentication, add an interior label or wash-tag photo and run a Deep Scan.
+              No brand mark detected. Add an interior label or wash-tag photo and run a Detailed Scan for a more complete construction analysis.
             </Text>
           )}
           <Text style={S.disclaimerNote}>
-            AI-generated estimate based on visual analysis — not a certified appraisal or guarantee of authenticity.
+            AI-generated observations based on visual analysis — not a certification or guarantee of authenticity.
           </Text>
           <Rule />
-
-          {/* Evidence */}
-          {r.authenticity.signals.length > 0 && (
-            <>
-              <SHead title="EVIDENCE" />
-              <Signals signals={r.authenticity.signals} />
-              <Rule />
-            </>
-          )}
 
           {/* Image */}
           <View style={S.imageWrap}>
@@ -476,13 +514,29 @@ export default function ResultScreen() {
             </>
           )}
 
-          {/* Economics */}
-          <SHead title="ECONOMICS" />
-          <EconRow label="PRODUCTION COST" value={r.financials.estimated_production_cost} />
+          {/* Production cost — always shown, independent of brand */}
+          <SHead title="PRODUCTION COST" />
+          <EconRow label="MATERIAL"  value={formatUsd(f.material_cost_usd)} />
           <Rule faint />
-          <EconRow label="BRAND PREMIUM"   value={r.financials.brand_premium} />
+          <EconRow label="LABOR (CMT)" value={formatUsd(f.labor_cost_usd)} />
           <Rule faint />
-          <EconRow label="RESELL VALUE"     value={r.financials.current_resell_market_value} highlight />
+          <EconRow label="TOTAL COST" value={formatUsd(f.total_production_cost_usd)} highlight />
+          {f.estimated_retail_price_usd != null && (
+            <>
+              <Rule faint />
+              <EconRow label="EST. RETAIL" value={formatUsd(f.estimated_retail_price_usd)} />
+            </>
+          )}
+          {f.brand_markup != null && (
+            <>
+              <Rule faint />
+              <EconRow label="BRAND MARKUP" value={`${f.brand_markup.toFixed(1)}×`} highlight />
+            </>
+          )}
+          <CostBar material={f.material_cost_usd} labor={f.labor_cost_usd} />
+          <Text style={S.confidenceNote}>
+            [ {f.confidence.toUpperCase()} CONFIDENCE ]{f.reasoning ? `  ${f.reasoning}` : ''}
+          </Text>
           <Rule />
 
           {/* Footer stamp */}
@@ -493,8 +547,8 @@ export default function ResultScreen() {
           {/* ── CTA blok ── */}
 
           {/* SHARE — primary, solid white */}
-          <TouchableOpacity style={S.shareBtn} onPress={handleShare} activeOpacity={0.8}>
-            <Text style={S.shareBtnTxt}>SHARE THIS REPORT</Text>
+          <TouchableOpacity style={S.shareBtn} onPress={handleShare} activeOpacity={0.8} disabled={shareState === 'preparing'}>
+            <Text style={S.shareBtnTxt}>{shareState === 'preparing' ? 'PREPARING...' : 'SHARE COST CARD'}</Text>
             <Text style={S.shareBtnArrow}>↑</Text>
           </TouchableOpacity>
 
@@ -504,17 +558,23 @@ export default function ResultScreen() {
 
           <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 8 }} />
 
-          {/* NEW AUTHENTICATION — secondary outline */}
+          {/* NEW ANALYSIS — secondary outline */}
           <TouchableOpacity
             style={S.outlineBtn}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation.navigate('Camera'); }}
             activeOpacity={0.7}
           >
-            <Text style={S.outlineBtnTxt}>NEW AUTHENTICATION →</Text>
+            <Text style={S.outlineBtnTxt}>NEW ANALYSIS →</Text>
           </TouchableOpacity>
 
         </Animated.View>
       </ScrollView>
+
+      {/* Hidden share card — rendered off-screen, captured on demand */}
+      <View style={S.hiddenCardWrap} pointerEvents="none">
+        <ShareCard ref={cardRef} imageUri={imageUri} r={r} />
+      </View>
+
     </View>
   );
 }
@@ -545,6 +605,7 @@ const S = StyleSheet.create({
   textureNote:     { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, lineHeight: 18, paddingBottom: SP.md, letterSpacing: 0.2 },
   unverifiedNote:  { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, lineHeight: 18, paddingTop: SP.sm, paddingBottom: SP.md, letterSpacing: 0.3 },
   disclaimerNote:  { fontFamily: F.mono, fontSize: 9, color: C.grey600, opacity: 0.5, lineHeight: 14, paddingTop: SP.xs, paddingBottom: SP.md, letterSpacing: 0.3 },
+  confidenceNote:  { fontFamily: F.mono, fontSize: 9, color: C.grey600, opacity: 0.6, lineHeight: 15, paddingTop: SP.sm, paddingBottom: SP.md, letterSpacing: 0.3 },
 
   footer:    { paddingVertical: SP.lg, alignItems: 'center' },
   footerTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey600 },
@@ -555,4 +616,6 @@ const S = StyleSheet.create({
 
   outlineBtn:    { borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', paddingVertical: 17, paddingHorizontal: SP.lg, flexDirection: 'row', justifyContent: 'center' },
   outlineBtnTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
+
+  hiddenCardWrap: { position: 'absolute', top: -9999, left: -9999 },
 });

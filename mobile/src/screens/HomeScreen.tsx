@@ -58,9 +58,14 @@ export default function HomeScreen() {
     ]).start();
   }, []);
 
-  const handleAuthenticate = () => {
+  const handleAnalyze = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate('Camera');
+  };
+
+  const handleGetCredits = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('Paywall');
   };
 
   const handleHistory = () => {
@@ -119,11 +124,14 @@ export default function HomeScreen() {
     <View style={S.root}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
-      {/* ── Top right: Scan counter + Logout ── */}
+      {/* ── Top right: Scan counter + Get Credits + Logout ── */}
       <View style={[S.topBar, { top: insets.top + 10 }]}>
         <View style={S.scanCounter}>
           <Text style={S.scanCounterText}>{strings.common.scansLeft(scansLeft)}</Text>
         </View>
+        <TouchableOpacity style={S.creditsBtn} onPress={handleGetCredits} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
+          <Text style={S.creditsText}>[ GET CREDITS ]</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={S.logoutBtn} onPress={handleLogout} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
           <Text style={S.logoutText}>{strings.common.logoutBtn}</Text>
         </TouchableOpacity>
@@ -151,7 +159,7 @@ export default function HomeScreen() {
         <Text style={S.subtitle}>{strings.home.subtitle}</Text>
       </Animated.View>
 
-      {/* ── Button group: History on top, Authenticate below ── */}
+      {/* ── Button group: History on top, Analyze below ── */}
       <Animated.View style={[S.buttonContainer, { opacity: buttonOpacity }]}>
 
         <TouchableOpacity style={S.historyButton} onPress={handleHistory} activeOpacity={0.55}>
@@ -160,8 +168,8 @@ export default function HomeScreen() {
 
         <View style={S.buttonGap} />
 
-        <TouchableOpacity style={S.button} onPress={handleAuthenticate} activeOpacity={0.55}>
-          <Text style={S.buttonText}>{strings.home.authenticateBtn}</Text>
+        <TouchableOpacity style={S.button} onPress={handleAnalyze} activeOpacity={0.55}>
+          <Text style={S.buttonText}>{strings.home.analyzeBtn}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -216,6 +224,18 @@ const S = StyleSheet.create({
     fontFamily:    F.mono,
     fontSize:      FS.xxs,          // 10
     color:         C.white,
+    letterSpacing: 1.5,
+  },
+  creditsBtn: {
+    paddingVertical:  4,
+    paddingHorizontal: 8,
+    borderWidth:      1,
+    borderColor:      'rgba(255,255,255,0.2)',
+  },
+  creditsText: {
+    fontFamily:    F.mono,
+    fontSize:      FS.xxs,
+    color:         C.grey400,
     letterSpacing: 1.5,
   },
   logoutBtn: {

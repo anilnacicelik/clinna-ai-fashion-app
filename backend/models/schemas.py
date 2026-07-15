@@ -28,14 +28,23 @@ class FabricEstimate(BaseModel):
 
 
 class Authenticity(BaseModel):
-    legit_probability_score: int   = Field(0, ge=-1, le=100)  # -1 = not verifiable (UNKNOWN brand)
-    signals:                 list[str] = Field(default_factory=list)
+    # Observable construction signals only — CLINNA never judges authenticity
+    # or outputs a probability/confidence score (legal risk: Gemini Vision
+    # has no brand-specific fine-tuning to back up such a verdict).
+    signals: list[str] = Field(default_factory=list)
 
 
 class Financials(BaseModel):
-    estimated_production_cost: str = ""
-    brand_premium:             str = ""
-    current_resell_market_value: str = ""
+    # Cost estimation is always performed from visible construction alone,
+    # independent of whether the brand could be identified.
+    material_cost_usd:          float = 0
+    labor_cost_usd:              float = 0
+    total_production_cost_usd:   float = 0
+    confidence:                  str   = "low"  # 'low' | 'medium' | 'high'
+    reasoning:                   str   = ""
+    # Only populated when brand is confirmed — null otherwise.
+    estimated_retail_price_usd: Optional[float] = None
+    brand_markup:                Optional[float] = None
 
 
 # ── Top-level response ────────────────────────────────────────────

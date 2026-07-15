@@ -44,30 +44,34 @@ export function useScansLeft() {
     }
   }, []);
 
-  // Atomic decrement via Supabase RPC — auth.uid() resolved server-side
-  const decrement = useCallback(async (): Promise<number> => {
+  // Atomic decrement via Supabase RPC — auth.uid() resolved server-side.
+  // Returns the new count on success, or null if the RPC failed — null is
+  // NOT the same as 0 (a legitimate "no scans left" result) and callers
+  // must check for it explicitly so a failed sync isn't mistaken for success.
+  const decrement = useCallback(async (): Promise<number | null> => {
     try {
       const { data, error } = await supabase.rpc('decrement_scans_left');
       if (error) {
         console.error('[CLINNA] useScansLeft decrement:', error);
-        return 0;
+        return null;
       }
       const next = Math.max(0, data ?? 0);
       setScansLeft(next);
       return next;
     } catch (e) {
       console.error('[CLINNA] useScansLeft decrement:', e);
-      return 0;
+      return null;
     }
   }, []);
 
-  // Deduct one credit — returns true if credit was consumed, false if none left
-  const useCredit = useCallback(async (): Promise<boolean> => {
+  // Deduct one credit — true if consumed, false if none left, null if the
+  // RPC itself failed (distinct from false — see decrement() above).
+  const useCredit = useCallback(async (): Promise<boolean | null> => {
     try {
       const { data, error } = await supabase.rpc('use_credit');
       if (error) {
         console.error('[CLINNA] useScansLeft useCredit:', error);
-        return false;
+        return null;
       }
       if (data === true) {
         setCredits(prev => Math.max(0, prev - 1));
@@ -75,7 +79,7 @@ export function useScansLeft() {
       return data === true;
     } catch (e) {
       console.error('[CLINNA] useScansLeft useCredit:', e);
-      return false;
+      return null;
     }
   }, []);
 
