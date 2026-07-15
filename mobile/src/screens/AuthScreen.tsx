@@ -35,6 +35,7 @@ export default function AuthScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [infoMsg,  setInfoMsg]  = useState<string | null>(null);
   const [loading,  setLoading]  = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false); // opt-in, default unchecked
 
   const contentOpacity = useRef(new Animated.Value(1)).current;
 
@@ -81,9 +82,19 @@ export default function AuthScreen() {
       if (error) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setErrorMsg(error.message.toUpperCase());
-      } else if (!data.session) {
-        // If email confirmation is required, session will not arrive yet
-        setInfoMsg(strings.auth.infoCheckEmail);
+      } else {
+        if (!data.session) {
+          // If email confirmation is required, session will not arrive yet
+          setInfoMsg(strings.auth.infoCheckEmail);
+        }
+        // Record consent (opt-in only — skip the call entirely when unchecked,
+        // matching the column's own false default). If email confirmation is
+        // required there's no session yet, so this RPC is a harmless no-op
+        // until the user's first login; the consent is not retried after that.
+        if (marketingConsent) {
+          const { error: consentErr } = await supabase.rpc('set_marketing_consent', { consent: true });
+          if (consentErr) console.error('[AuthScreen] set_marketing_consent error:', consentErr);
+        }
       }
     } catch (e: unknown) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -155,6 +166,15 @@ export default function AuthScreen() {
             onShowToggle={() => setShowPass(!showPass)}
           />
 
+          {mode === 'signup' && (
+            <Checkbox
+              checked={marketingConsent}
+              onToggle={() => { Haptics.selectionAsync(); setMarketingConsent(c => !c); }}
+              label={strings.auth.marketingConsent}
+              note={strings.auth.marketingConsentNote}
+            />
+          )}
+
           {/* ── Brutalist error message ── */}
           {errorMsg && (
             <Text style={S.errorText}>{strings.auth.errorFmt(errorMsg)}</Text>
@@ -224,6 +244,20 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, showP
   );
 }
 
+function Checkbox({ checked, onToggle, label, note }: {
+  checked: boolean; onToggle: () => void; label: string; note?: string;
+}) {
+  return (
+    <TouchableOpacity style={CHK.row} onPress={onToggle} activeOpacity={0.7}>
+      <View style={[CHK.box, checked && CHK.boxChecked]} />
+      <View style={{ flex: 1 }}>
+        <Text style={CHK.label}>{label}</Text>
+        {!!note && <Text style={CHK.note}>{note}</Text>}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 function PrimaryBtn({ label, onPress, loading }: any) {
   return (
     <TouchableOpacity
@@ -279,6 +313,14 @@ const FLD = StyleSheet.create({
   input:    { flex: 1, fontFamily: F.mono, fontSize: FS.base, color: C.white, paddingVertical: 10 },
   eyeTxt:   { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600 },
   underline: { height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
+});
+
+const CHK = StyleSheet.create({
+  row:   { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: SP.lg },
+  box:   { width: 16, height: 16, borderWidth: 1, borderColor: C.white, marginTop: 2 },
+  boxChecked: { backgroundColor: C.white },
+  label: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey400, lineHeight: 16 },
+  note:  { fontFamily: F.mono, fontSize: 9, letterSpacing: 0.5, color: C.grey600, marginTop: 4, lineHeight: 13 },
 });
 
 const TB = StyleSheet.create({

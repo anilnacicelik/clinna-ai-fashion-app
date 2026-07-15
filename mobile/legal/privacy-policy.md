@@ -15,13 +15,16 @@ When you create an account, we collect your **email address** and the password y
 When you use the App to scan an item, we collect the **photos you take or select** ("scan images") for the purpose of generating an authentication and valuation report.
 
 ### 1.3 Scan History
-We store the **reports generated from your scans** (brand identification, authenticity score, fabric estimate, valuation estimate, and related metadata) and associate them with your account so you can view your history.
+We store the **reports generated from your scans** (brand identification, observable construction signals, fabric estimate, production cost estimate, and related metadata) and associate them with your account so you can view your history.
 
 ### 1.4 Purchase Information
 If you purchase credits or a Pro subscription, our payment processing partner (RevenueCat, via the Apple App Store or Google Play Store) shares limited transaction data with us (e.g., product purchased, purchase/renewal/expiration dates) so we can grant you the corresponding entitlement. **We do not receive or store your payment card details** — these are handled entirely by Apple/Google and RevenueCat.
 
 ### 1.5 Automatically Collected Information
 We may collect limited technical information (such as app version and error logs) to diagnose problems and keep the App running reliably.
+
+### 1.6 Marketing Preference
+If you opt in to marketing communications during sign-up (see Section 5), we store that choice and the date it was given or last updated, so we can honor your preference and demonstrate compliance with applicable law.
 
 ## 2. How We Use Your Information
 
@@ -63,27 +66,38 @@ Depending on your location, you may have rights to:
 
 **Deleting your account:** You can permanently delete your account and all associated data (profile, scan history, and stored images) at any time from within the App (Home screen → "Delete Account"). This action is irreversible.
 
-To exercise any of these rights, or if in-app deletion is unavailable to you for any reason, contact us using the details in Section 8.
+To exercise any of these rights, or if in-app deletion is unavailable to you for any reason, contact us using the details in Section 9.
 
-## 5. Data Retention
+## 5. Marketing Communications
+
+During sign-up, you can optionally check "Send me product updates" (unchecked by default — we never enroll you automatically). If you opt in, we may email you about new features, product updates, and occasional offers related to Clinna. We do not send marketing emails on behalf of third parties, and we do not sell or share your email address with third parties for their own marketing purposes.
+
+**How to opt out:** You can withdraw consent at any time by:
+- Using the unsubscribe link included in every marketing email, or
+- Contacting us at the email in Section 9 and asking to be removed, or
+- (Coming soon) toggling the preference off from within the App.
+
+Opting out of marketing emails does not affect transactional emails necessary for your account (e.g., password reset, purchase receipts, security notices) — you will continue to receive those regardless of your marketing preference.
+
+## 6. Data Retention
 
 We retain your account information and scan history for as long as your account remains active, so that you can access your scan history at any time. If you delete your account, we permanently delete your profile, scan history, and stored images from our active systems. Some information may persist for a limited period in backup systems or as required by law before being purged.
 
-## 6. Data Security
+## 7. Data Security
 
 We use industry-standard technical and organizational measures — including encryption in transit, access controls, and Row Level Security on our database — to protect your information. However, no method of transmission or storage is 100% secure, and we cannot guarantee absolute security.
 
-## 7. Children's Privacy
+## 8. Children's Privacy
 
 The App is not directed to children under 13 (or the equivalent minimum age in your jurisdiction), and we do not knowingly collect personal information from children. If you believe a child has provided us with personal information, please contact us so we can delete it.
 
-## 8. Contact Us
+## 9. Contact Us
 
 If you have questions about this Privacy Policy or wish to exercise your data rights, contact us at:
 
 **Operator:** Naci Çelik (Türkiye)
 **Email:** clinch147258369@outlook.com
 
-## 9. Changes to This Policy
+## 10. Changes to This Policy
 
 We may update this Privacy Policy from time to time. We will update the "Last updated" date above when we do. Continued use of the App after changes take effect constitutes acceptance of the revised policy.

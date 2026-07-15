@@ -68,6 +68,9 @@ export const strings = {
     errorWeakPassword: 'PASSWORD MUST CONTAIN AT LEAST ONE LETTER AND ONE NUMBER',
     infoCheckEmail:    'CHECK YOUR EMAIL FOR CONFIRMATION LINK',
 
+    marketingConsent:     'SEND ME PRODUCT UPDATES',
+    marketingConsentNote: 'Optional. Unsubscribe anytime.',
+
     errorFmt:          (msg: string) => `[ ERROR: ${msg} ]`,
     infoFmt:           (msg: string) => `[ ${msg} ]`,
   },
