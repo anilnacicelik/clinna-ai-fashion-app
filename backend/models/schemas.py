@@ -10,6 +10,8 @@ from typing import Optional
 # ── Sub-models (match the JSON shape exactly) ────────────────────
 
 class ArchiveId(BaseModel):
+    model_config = {"protected_namespaces": ()}  # allow field name "model_name"
+
     brand:           str = ""
     collection_year: str = ""
     model_name:      str = ""
