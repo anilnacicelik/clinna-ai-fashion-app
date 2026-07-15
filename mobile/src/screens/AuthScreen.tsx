@@ -121,6 +121,7 @@ export default function AuthScreen() {
         <View style={S.logoBlock}>
           <Text style={S.wordmark}>{strings.auth.wordmark}</Text>
           <View style={S.logoRule} />
+          <Text style={S.brandLabel}>CLINNA</Text>
           <Text style={S.logoSub}>{strings.auth.tagline}</Text>
         </View>
 
@@ -248,6 +249,7 @@ const S = StyleSheet.create({
   logoBlock: { alignItems: 'flex-start', marginBottom: SP.xxl },
   wordmark:  { fontFamily: F.brand, fontSize: 72, color: C.white, lineHeight: 80 },
   logoRule:  { width: 32, height: 1, backgroundColor: 'rgba(255,255,255,0.3)', marginVertical: SP.xs },
+  brandLabel: { fontFamily: F.mono, fontSize: FS.xs, letterSpacing: 6, color: C.grey600, marginBottom: SP.xs },
   logoSub:   { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
 
   // Brutalist error — red monospace

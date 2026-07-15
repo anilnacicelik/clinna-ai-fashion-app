@@ -143,6 +143,7 @@ export default function HomeScreen() {
           {strings.common.wordmark}
         </Text>
         <View style={S.rule} />
+        <Text style={S.brandLabel}>CLINNA</Text>
       </Animated.View>
 
       {/* ── Subtitle ── */}
@@ -255,11 +256,18 @@ const S = StyleSheet.create({
     backgroundColor: 'rgba(242, 240, 235, 0.25)',
     marginTop:       8,
   },
+  brandLabel: {
+    fontFamily:    F.mono,
+    fontSize:      FS.xs,
+    letterSpacing: 6,
+    color:         C.grey600,
+    marginTop:     SP.sm,
+  },
 
   // ── Subtitle ─────────────────────────────────────────────────────
   subtitleContainer: {
     position:   'absolute',
-    top:        height * 0.30 + 158,
+    top:        height * 0.30 + 158 + 26, // +26 to clear the new CLINNA brand label line above
     alignItems: 'center',
   },
   subtitle: {
