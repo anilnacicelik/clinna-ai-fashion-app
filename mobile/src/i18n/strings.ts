@@ -82,6 +82,10 @@ export const strings = {
   },
   result:  {},
   history: {},
-  paywall: {},
+  paywall: {
+    storeUnavailable: 'STORE NOT AVAILABLE — TRY AGAIN LATER.',
+    purchaseFailed:   'PURCHASE FAILED — PLEASE TRY AGAIN.',
+    restoreFailed:    'RESTORE FAILED — PLEASE TRY AGAIN.',
+  },
 
 } as const;

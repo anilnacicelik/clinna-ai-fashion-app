@@ -9,6 +9,7 @@ import {
   findPackage,
 } from '../services/purchases';
 import { supabase } from '../services/supabase';
+import { strings } from '../i18n/strings';
 
 export function usePurchases() {
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
@@ -35,7 +36,7 @@ export function usePurchases() {
   const purchase = useCallback(async (productId: string): Promise<boolean> => {
     const pkg = findPackage(offerings, productId);
     if (!pkg) {
-      setError('STORE NOT AVAILABLE — TRY AGAIN LATER');
+      setError(strings.paywall.storeUnavailable);
       return false;
     }
     setLoading(true);
@@ -47,7 +48,7 @@ export function usePurchases() {
       // Cancelled by user — not an error worth surfacing
       if (e?.userCancelled === true) return false;
       console.error('[CLINNA usePurchases] purchase:', e);
-      setError((e?.message ?? 'PURCHASE FAILED').toUpperCase());
+      setError(strings.paywall.purchaseFailed);
       return false;
     } finally {
       setLoading(false);
@@ -62,7 +63,7 @@ export function usePurchases() {
       return info.activeSubscriptions.length > 0;
     } catch (e: any) {
       console.error('[CLINNA usePurchases] restore:', e);
-      setError((e?.message ?? 'RESTORE FAILED').toUpperCase());
+      setError(strings.paywall.restoreFailed);
       return false;
     } finally {
       setLoading(false);

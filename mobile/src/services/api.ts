@@ -240,7 +240,12 @@ async function handleResponse(res: Response): Promise<ArchiveReport> {
     } catch {
       console.error(`[CLINNA API] HTTP ${res.status} — could not parse body`);
     }
-    throw new ApiError(res.status, `SERVER ERROR — ${detail}`, res.status >= 500);
+    // 4xx details are curated, user-facing backend messages (e.g. "Image too
+    // large. Max 10 MB.") — safe to show as-is. 5xx details can carry
+    // implementation-flavored text, so use the generic message instead.
+    const isServerError = res.status >= 500;
+    const message = isServerError ? strings.common.errors.serverError : detail;
+    throw new ApiError(res.status, message, isServerError);
   }
 
   try {
