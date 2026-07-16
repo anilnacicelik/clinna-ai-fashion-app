@@ -3,11 +3,14 @@ import { supabase } from './supabase';
 export async function uploadScanImage(
   localUri: string,
   scanId:   string,
+  userId:   string,
 ): Promise<string | null> {
   try {
     const ext      = localUri.split('.').pop()?.toLowerCase() ?? 'jpg';
     const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-    const filePath = `scans/${scanId}/photo.${ext}`;
+    // Storage RLS ("Users upload own images") requires the first path
+    // segment to equal auth.uid() — see fix_rls_permissions.sql.
+    const filePath = `${userId}/${scanId}/photo.${ext}`;
 
     // "fetch().blob()" is chronically broken in React Native.
     // Using FormData is the most reliable approach:

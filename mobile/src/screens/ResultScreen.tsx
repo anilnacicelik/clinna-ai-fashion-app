@@ -23,6 +23,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { C, F, FS, SP } from '../theme';
+import { strings } from '../i18n/strings';
 import { ArchiveReport } from '../services/api';
 import { uploadScanImage } from '../services/storageUpload';
 import { supabase } from '../services/supabase';
@@ -63,10 +64,16 @@ async function saveToArchive(
   imageUri: string,
   report:   ArchiveReport,
 ): Promise<string> {
+  // RLS ("Users see own scans") requires user_id = auth.uid() on INSERT —
+  // set it explicitly rather than relying solely on the column DEFAULT.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not signed in');
+
   // 1. Insert row into scans table — get ID first
   const { data: row, error: insertError } = await supabase
     .from('scans')
     .insert({
+      user_id:         user.id,
       brand:           report.archive_id.brand           || null,
       collection_year: report.archive_id.collection_year || null,
       model_name:      report.archive_id.model_name      || null,
@@ -83,7 +90,7 @@ async function saveToArchive(
 
   // 2. Upload photo to Storage and update image_url
   //    uploadScanImage already updates the scans table (see storageUpload.ts)
-  await uploadScanImage(imageUri, scanId);
+  await uploadScanImage(imageUri, scanId, user.id);
 
   return scanId;
 }
@@ -410,7 +417,10 @@ export default function ResultScreen() {
         <Rule />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 20, padding: SP.xl }}>
           <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 4, color: C.grey600 }}>
-            NOT A FASHION ITEM
+            {strings.result.notFashionTitle}
+          </Text>
+          <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 0.3, color: C.grey600, textAlign: 'center', lineHeight: 18, opacity: 0.8 }}>
+            {strings.result.notFashionNote}
           </Text>
           <TouchableOpacity style={S.outlineBtn} onPress={() => navigation.navigate('Camera')} activeOpacity={0.7}>
             <Text style={S.outlineBtnTxt}>TRY AGAIN →</Text>

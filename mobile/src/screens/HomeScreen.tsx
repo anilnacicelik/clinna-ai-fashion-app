@@ -124,11 +124,8 @@ export default function HomeScreen() {
     <View style={S.root}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
-      {/* ── Top right: Scan counter + Get Credits + Logout ── */}
+      {/* ── Top right: Get Credits + Logout ── */}
       <View style={[S.topBar, { top: insets.top + 10 }]}>
-        <View style={S.scanCounter}>
-          <Text style={S.scanCounterText}>{strings.common.scansLeft(scansLeft)}</Text>
-        </View>
         <TouchableOpacity style={S.creditsBtn} onPress={handleGetCredits} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
           <Text style={S.creditsText}>[ GET CREDITS ]</Text>
         </TouchableOpacity>
@@ -171,6 +168,10 @@ export default function HomeScreen() {
         <TouchableOpacity style={S.button} onPress={handleAnalyze} activeOpacity={0.55}>
           <Text style={S.buttonText}>{strings.home.analyzeBtn}</Text>
         </TouchableOpacity>
+
+        <View style={S.scanCounter}>
+          <Text style={S.scanCounterText}>{strings.common.scansLeft(scansLeft)}</Text>
+        </View>
 
         <TouchableOpacity
           style={S.deleteAccountBtn}
@@ -215,6 +216,8 @@ const S = StyleSheet.create({
     gap:           8,
   },
   scanCounter: {
+    alignSelf:        'center',
+    marginTop:        14,
     borderWidth:      1,
     borderColor:      C.white,
     paddingVertical:  4,

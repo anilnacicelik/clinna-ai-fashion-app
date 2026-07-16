@@ -86,7 +86,10 @@ export const strings = {
     syncIssueScan:     'YOUR SCAN COUNT COULD NOT BE UPDATED. CHECK YOUR CONNECTION — YOUR REPORT IS STILL READY.',
     syncIssueCredit:   'YOUR CREDIT COULD NOT BE DEDUCTED. CHECK YOUR CONNECTION — YOUR REPORT IS STILL READY.',
   },
-  result:  {},
+  result:  {
+    notFashionTitle: 'NOT A FASHION ITEM',
+    notFashionNote:  'No fashion item detected. This scan has been counted.',
+  },
   history: {},
   paywall: {
     storeUnavailable: 'STORE NOT AVAILABLE — TRY AGAIN LATER.',
