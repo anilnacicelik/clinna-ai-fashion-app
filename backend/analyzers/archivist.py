@@ -12,6 +12,7 @@ Changes v4 → v5:
 """
 import logging
 from services.vision import vision_analyze_multi
+from analyzers.brand_knowledge import is_known_brand
 from models.schemas import (
     ArchiveReport, ArchiveId, ColorAnalysis,
     FabricEstimate, Authenticity, Financials,
@@ -54,6 +55,19 @@ If NONE of these are visible, write "UNKNOWN" for brand. Do NOT infer a brand fr
   - Vague resemblance to a brand's aesthetic
 
 A confident "UNKNOWN" is infinitely better than a wrong brand name.
+
+BRAND READING — CRITICAL
+Reading letters off a garment is NOT the same as recognizing a brand. If you read a
+brand name but do not recognize it as a real, known fashion brand, set brand to UNKNOWN.
+
+Never invent a brand from partially-read text. If the text is unclear, partially
+obscured, or does not match a brand you know exists, output UNKNOWN.
+
+Only set a brand name when you are confident the brand actually exists AND the text
+clearly matches it.
+
+Example: text reads "ASKAURSE" — no such brand exists → brand: UNKNOWN
+Example: text reads "ASKYURSELF" — known LA streetwear brand → brand: ASKYURSELF
 
 RULE 2 — COLLECTION YEAR: only state if you can justify it from a visible label,
 known colorway, or documented detail. Otherwise "Unknown".
@@ -336,11 +350,14 @@ async def run_archive_analysis(
         labor    = round(_f(fi, "labor_cost_usd"), 2)
         total    = round(material + labor, 2)
 
-        # Retail/markup are only meaningful once a brand is confirmed —
-        # enforced here regardless of what the model returned.
+        # Retail/markup are only meaningful once a brand is confirmed AND that
+        # brand actually exists in our known-brand whitelist — a model can
+        # read letters off a garment correctly and still name a brand that
+        # isn't real (e.g. "ASKAURSE"). Enforced here regardless of what the
+        # model returned.
         retail = None
         markup = None
-        if brand and brand.strip().upper() != "UNKNOWN":
+        if brand and brand.strip().upper() != "UNKNOWN" and is_known_brand(brand):
             retail = _f_opt(fi, "estimated_retail_price_usd")
             if retail is not None and total > 0:
                 markup = round(retail / total, 2)

@@ -2,6 +2,73 @@
 CLINNA AI — Brand-specific authentication knowledge.
 Verbatim expert prompts per brand, preserved for future wiring into the pipeline.
 """
+import re
+import unicodedata
+
+# ─── Known-brand whitelist ─────────────────────────────────────────
+# Used to gate estimated_retail_price_usd / brand_markup: a brand name the
+# model returns must exist here, or those two fields are nulled server-side.
+# This is a real-world "does this brand exist" check — separate in purpose
+# from BRAND_PROMPTS above, which only holds deep-dive authentication prompts
+# for a handful of brands. Keep this list broad (streetwear / heritage /
+# outdoor / luxury / denim) since it directly controls what gets a retail
+# estimate.
+KNOWN_BRANDS: set[str] = {
+    # Avant-garde / archive fashion
+    "maison margiela", "margiela", "rick owens", "drkshdw", "lilies", "tecuatl",
+    "number nine", "number (n)ine", "raf simons", "jil sander", "dior homme",
+    "helmut lang", "yohji yamamoto", "y's", "y-3", "comme des garcons", "cdg",
+    "ann demeulemeester", "dries van noten", "issey miyake", "a.p.c.",
+    "junya watanabe", "sacai", "undercover", "kapital", "visvim", "neighborhood",
+    "wtaps", "our legacy", "lemaire", "acne studios", "thom browne",
+
+    # Streetwear
+    "stussy", "supreme", "palace", "bape", "a bathing ape", "kith", "off-white",
+    "fear of god", "essentials", "fear of god essentials", "chrome hearts",
+    "aime leon dore", "noah", "vlone", "anti social social club",
+    "askyurself", "vetements", "yeezy",
+
+    # Sport / outdoor
+    "nike", "adidas", "arc'teryx", "veilance", "patagonia",
+    "the north face", "columbia", "champion", "reebok", "puma", "new balance",
+    "converse", "vans", "timberland", "dr. martens",
+
+    # Heritage / workwear / denim
+    "carhartt", "carhartt wip", "levi's", "wrangler", "lee",
+    "ralph lauren", "polo ralph lauren", "tommy hilfiger", "calvin klein",
+
+    # Luxury houses
+    "hermes", "louis vuitton", "gucci", "prada", "bottega veneta",
+    "balenciaga", "saint laurent", "ysl", "celine", "loewe", "burberry",
+    "moncler", "givenchy", "versace", "dolce & gabbana",
+    "balmain", "diesel", "stone island", "cp company",
+}
+
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9\s]")
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _normalize_brand(name: str) -> str:
+    """Lowercase, strip accents/punctuation, collapse whitespace — so
+    'Arc'teryx', 'ARCTERYX' and 'arc teryx' all compare equal."""
+    decomposed = unicodedata.normalize("NFKD", name.lower())
+    stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
+    no_punct = _NON_ALNUM_RE.sub(" ", stripped)
+    return _WHITESPACE_RE.sub(" ", no_punct).strip()
+
+
+_KNOWN_BRANDS_NORMALIZED: set[str] = {_normalize_brand(b) for b in KNOWN_BRANDS}
+
+
+def is_known_brand(brand: str) -> bool:
+    """True if `brand` matches a real, known fashion brand in KNOWN_BRANDS."""
+    if not brand:
+        return False
+    normalized = _normalize_brand(brand)
+    if not normalized or normalized == "unknown":
+        return False
+    return normalized in _KNOWN_BRANDS_NORMALIZED
+
 
 BRAND_PROMPTS: dict[str, str] = {
 
