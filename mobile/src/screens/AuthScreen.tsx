@@ -105,6 +105,38 @@ export default function AuthScreen() {
     // If session exists → Auth Guard automatically navigates to Home
   };
 
+  // ── 3. Forgot Password (Supabase hosted reset flow) ─────────────
+  // No custom deep link scheme is configured for this app, so the reset
+  // link opens Supabase's flow on a static page in the clinna-legal site
+  // (see legal-site/reset-password.html) where the user sets a new
+  // password in the browser, then returns to the app to sign in.
+
+  const handleForgotPassword = async () => {
+    clearMessages();
+    if (!email.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setErrorMsg(strings.auth.enterEmailFirst);
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: 'https://anilnacicelik.github.io/clinna-legal/reset-password.html',
+      });
+      if (error) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setErrorMsg(strings.auth.errorResetFailed);
+      } else {
+        setInfoMsg(strings.auth.resetSent);
+      }
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setErrorMsg(strings.auth.errorResetFailed);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePrimary = () => {
     if (loading) return;
     if (mode === 'login') handleEmailLogin();
@@ -165,6 +197,16 @@ export default function AuthScreen() {
             showPassword={showPass}
             onShowToggle={() => setShowPass(!showPass)}
           />
+
+          {mode === 'login' && (
+            <TouchableOpacity
+              style={S.forgotRow}
+              onPress={() => { Haptics.selectionAsync(); handleForgotPassword(); }}
+              disabled={loading}
+            >
+              <Text style={S.forgotText}>{strings.auth.forgotPassword}</Text>
+            </TouchableOpacity>
+          )}
 
           {mode === 'signup' && (
             <Checkbox
@@ -285,6 +327,10 @@ const S = StyleSheet.create({
   logoRule:  { width: 32, height: 1, backgroundColor: 'rgba(255,255,255,0.3)', marginVertical: SP.xs },
   brandLabel: { fontFamily: F.mono, fontSize: FS.xs, letterSpacing: 6, color: C.grey600, marginBottom: SP.xs },
   logoSub:   { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
+
+  // Forgot-password link — login mode only
+  forgotRow: { alignSelf: 'flex-end', marginTop: -SP.sm, marginBottom: SP.lg },
+  forgotText: { fontFamily: F.mono, fontSize: FS.xs, letterSpacing: 2, color: C.grey600 },
 
   // Brutalist error — red monospace
   errorText: {

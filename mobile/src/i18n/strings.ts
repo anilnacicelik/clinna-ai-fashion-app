@@ -68,6 +68,11 @@ export const strings = {
     errorWeakPassword: 'PASSWORD MUST CONTAIN AT LEAST ONE LETTER AND ONE NUMBER',
     infoCheckEmail:    'CHECK YOUR EMAIL FOR CONFIRMATION LINK',
 
+    forgotPassword:    'FORGOT PASSWORD?',
+    resetSent:         'CHECK YOUR EMAIL — reset link sent',
+    enterEmailFirst:   'Enter your email first',
+    errorResetFailed:  'COULD NOT SEND RESET EMAIL — TRY AGAIN LATER',
+
     marketingConsent:     'SEND ME PRODUCT UPDATES',
     marketingConsentNote: 'Optional. Unsubscribe anytime.',
 
