@@ -72,12 +72,22 @@ Example: text reads "ASKYURSELF" — known LA streetwear brand → brand: ASKYUR
 RULE 2 — COLLECTION YEAR: only state if you can justify it from a visible label,
 known colorway, or documented detail. Otherwise "Unknown".
 
-RULE 3 — is_fashion_item is TRUE whenever ANY garment, footwear, accessory, or bag is
+RULE 3 — MODEL NAME ANTI-HALLUCINATION:
+Only state a specific model, style name, or season code if it is directly identifiable from
+a clearly visible tag, label, or an unmistakable, iconic design signature (e.g., Rick Owens
+Ramones, Margiela Tabi, CDG Play heart). If you are inferring, guessing, or uncertain about
+the exact model name or season, you MUST output "Unknown" for the model/season field. A
+hallucinated model name destroys collector trust. When in doubt, strictly prefer "Unknown"
+while keeping the brand and material/cost analysis accurate.
+Example: visible "Cargo Bauhaus" tag → model: Cargo Bauhaus
+Example: generic black cargo pant, no identifying tag → Unknown
+
+RULE 4 — is_fashion_item is TRUE whenever ANY garment, footwear, accessory, or bag is
 visible in frame — including worn items, partial views/crops, items held or draped over
 something, and items on a person regardless of how much of the frame they occupy. Only set
 it to FALSE when the image is unambiguously unrelated to fashion (see FAST REJECT above).
 
-RULE 4 — NEVER JUDGE AUTHENTICITY. You have no brand-specific fine-tuning and cannot
+RULE 5 — NEVER JUDGE AUTHENTICITY. You have no brand-specific fine-tuning and cannot
 reliably tell a genuine item from a well-made counterfeit from photos alone. Do not output
 a probability, confidence score, or verdict of "authentic" / "fake" / "legit" anywhere.
 Only report what you can literally SEE: stitching regularity, hardware finish, label

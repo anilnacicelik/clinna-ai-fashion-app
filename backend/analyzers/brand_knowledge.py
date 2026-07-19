@@ -42,16 +42,38 @@ KNOWN_BRANDS: set[str] = {
     "balenciaga", "saint laurent", "ysl", "celine", "loewe", "burberry",
     "moncler", "givenchy", "versace", "dolce & gabbana",
     "balmain", "diesel", "stone island", "cp company",
+
+    # Avant-garde / archive fashion — additions
+    "kiko kostadinov", "han kjobenhavn", "sterling ruby",
+    "enfants riches deprimes", "erd",
+
+    # Streetwear — additions
+    "gallery dept", "gallery department", "a cold wall", "acw",
+    "corteiz", "crtz", "sp5der", "denim tears",
 }
 
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9\s]")
 _WHITESPACE_RE = re.compile(r"\s+")
 
+# Letters with no NFKD canonical decomposition (not "base + combining mark",
+# so unicodedata.combining() can't strip them) — must be mapped by hand or
+# names like "Kjøbenhavn" / "Ærø" never normalize down to ASCII.
+_MANUAL_CHAR_MAP = str.maketrans({
+    "ø": "o", "Ø": "O",
+    "đ": "d", "Đ": "D",
+    "ł": "l", "Ł": "L",
+    "æ": "ae", "Æ": "AE",
+    "œ": "oe", "Œ": "OE",
+    "ß": "ss",
+})
+
 
 def _normalize_brand(name: str) -> str:
     """Lowercase, strip accents/punctuation, collapse whitespace — so
-    'Arc'teryx', 'ARCTERYX' and 'arc teryx' all compare equal."""
-    decomposed = unicodedata.normalize("NFKD", name.lower())
+    'Arc'teryx', 'ARCTERYX', 'arc teryx', and 'Han Kjøbenhavn' /
+    'Han Kjobenhavn' all compare equal."""
+    mapped = name.translate(_MANUAL_CHAR_MAP)
+    decomposed = unicodedata.normalize("NFKD", mapped.lower())
     stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
     no_punct = _NON_ALNUM_RE.sub(" ", stripped)
     return _WHITESPACE_RE.sub(" ", no_punct).strip()
