@@ -1,9 +1,14 @@
 /**
  * CLINNA — HomeScreen.tsx
- * Changes:
+ * Public root — renders fully without a session.
+ *
  *  - Wordmark fontSize 112, letterSpacing 2
  *  - Top right: [ 3 SCANS LEFT ] counter (1px white border) + [ LOGOUT ] button
  *  - Logout → supabase.auth.signOut()  (Auth Guard handles redirect)
+ *  - Signed out: account-specific chrome (scan counter, delete account) is
+ *    hidden and [ LOGOUT ] becomes [ SIGN IN ]. ANALYZE / HISTORY / GET CREDITS
+ *    stay visible and route through requireAuth, which sends the user to the
+ *    Auth screen and resumes the action once they're signed in.
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
@@ -18,8 +23,9 @@ import * as Haptics from 'expo-haptics';
 import { supabase } from '../services/supabase';
 import { deleteAccount } from '../services/api';
 import { useScansLeft } from '../hooks/useScansLeft';
+import { useSession } from '../context/SessionContext';
 import { C, F, FS, SP } from '../theme';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { AuthRedirect, RootStackParamList } from '../navigation/AppNavigator';
 import { strings } from '../i18n/strings';
 import { PRIVACY_URL, TERMS_URL } from '../config/legal';
 
@@ -32,10 +38,16 @@ export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const insets     = useSafeAreaInsets();
   const { scansLeft, load } = useScansLeft();
+  const { session } = useSession();
   const [deleting, setDeleting] = useState(false);
 
   // Refresh counter on every focus (stays current when returning from CameraScreen)
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // This screen now survives sign-in/sign-out instead of being remounted by a
+  // stack swap, so resync on account change — otherwise the previous account's
+  // count could linger until the next focus.
+  useEffect(() => { load(); }, [session?.user?.id, load]);
 
   const wordmarkOpacity = useRef(new Animated.Value(0)).current;
   const wordmarkY       = useRef(new Animated.Value(24)).current;
@@ -58,19 +70,31 @@ export default function HomeScreen() {
     ]).start();
   }, []);
 
+  // Gate for the screens that need an account. Signed in → straight there.
+  // Signed out → the Auth screen, which resumes `dest` once the session lands.
+  const requireAuth = (dest: AuthRedirect) => {
+    if (session) navigation.navigate(dest);
+    else navigation.navigate('Auth', { redirectTo: dest });
+  };
+
   const handleAnalyze = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate('Camera');
+    requireAuth('Camera');
   };
 
   const handleGetCredits = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate('Paywall');
+    requireAuth('Paywall');
   };
 
   const handleHistory = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate('History');
+    requireAuth('History');
+  };
+
+  const handleSignIn = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('Auth');
   };
 
   const handleLogout = async () => {
@@ -129,8 +153,14 @@ export default function HomeScreen() {
         <TouchableOpacity style={S.creditsBtn} onPress={handleGetCredits} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
           <Text style={S.creditsText}>[ GET CREDITS ]</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={S.logoutBtn} onPress={handleLogout} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
-          <Text style={S.logoutText}>{strings.common.logoutBtn}</Text>
+        <TouchableOpacity
+          style={S.logoutBtn}
+          onPress={session ? handleLogout : handleSignIn}
+          hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+        >
+          <Text style={S.logoutText}>
+            {session ? strings.common.logoutBtn : strings.common.signInBtn}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -169,21 +199,27 @@ export default function HomeScreen() {
           <Text style={S.buttonText}>{strings.home.analyzeBtn}</Text>
         </TouchableOpacity>
 
-        <View style={S.scanCounter}>
-          <Text style={S.scanCounterText}>{strings.common.scansLeft(scansLeft)}</Text>
-        </View>
+        {/* Account-only chrome — a signed-out visitor has no count to show
+            and no account to delete. */}
+        {!!session && (
+          <>
+            <View style={S.scanCounter}>
+              <Text style={S.scanCounterText}>{strings.common.scansLeft(scansLeft)}</Text>
+            </View>
 
-        <TouchableOpacity
-          style={S.deleteAccountBtn}
-          onPress={handleDeleteAccount}
-          activeOpacity={0.55}
-          disabled={deleting}
-          hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-        >
-          <Text style={S.deleteAccountText}>
-            {deleting ? '[ DELETING... ]' : strings.common.deleteAccountBtn}
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={S.deleteAccountBtn}
+              onPress={handleDeleteAccount}
+              activeOpacity={0.55}
+              disabled={deleting}
+              hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+            >
+              <Text style={S.deleteAccountText}>
+                {deleting ? '[ DELETING... ]' : strings.common.deleteAccountBtn}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
 
         <View style={S.legalRow}>
           <TouchableOpacity onPress={handlePrivacyPolicy} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>

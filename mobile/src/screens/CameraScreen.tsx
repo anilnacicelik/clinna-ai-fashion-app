@@ -349,7 +349,7 @@ function PermScreen({ onRequest }: { onRequest: () => void }) {
         activeOpacity={0.7}
       >
         <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.white }}>
-          GRANT ACCESS
+          Continue
         </Text>
       </TouchableOpacity>
     </View>

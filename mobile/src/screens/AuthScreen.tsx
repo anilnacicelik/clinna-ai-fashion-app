@@ -2,20 +2,32 @@
  * CLINNA — AuthScreen.tsx
  * Supabase auth.signInWithPassword + auth.signUp
  * Errors: brutalist red monospace [ ERROR: ... ]
- * Navigation: onAuthStateChange Auth Guard in AppNavigator handles routing
+ *
+ * Reached on demand, not at launch: HomeScreen pushes this screen when the
+ * user takes an action that needs an account, passing `redirectTo`. Once a
+ * session lands we continue to that action; without one we just pop back to
+ * Home. The screen is always dismissable ([ CLOSE ] + swipe) — signing in is
+ * never a dead end the user can't back out of.
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Animated, StatusBar, KeyboardAvoidingView, ScrollView,
   Platform, Dimensions,
 } from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../services/supabase';
+import { useSession } from '../context/SessionContext';
 import { C, F, FS, SP } from '../theme';
+import { RootStackParamList } from '../navigation/AppNavigator';
 import { strings } from '../i18n/strings';
+
+type Nav       = NativeStackNavigationProp<RootStackParamList, 'Auth'>;
+type AuthRoute = RouteProp<RootStackParamList, 'Auth'>;
 
 const { height } = Dimensions.get('window');
 type AuthMode = 'login' | 'signup';
@@ -25,7 +37,28 @@ type AuthMode = 'login' | 'signup';
 // ═══════════════════════════════════════════════════════════════════
 
 export default function AuthScreen() {
-  const insets = useSafeAreaInsets();
+  const insets     = useSafeAreaInsets();
+  const navigation = useNavigation<Nav>();
+  const route      = useRoute<AuthRoute>();
+  const { session } = useSession();
+
+  const redirectTo = route.params?.redirectTo;
+
+  // Leave as soon as a session exists — on sign-in, and on sign-up when the
+  // project doesn't require email confirmation. Resumes the action the user
+  // was gated out of, otherwise returns to where they came from.
+  useEffect(() => {
+    if (!session) return;
+    if (redirectTo) navigation.replace(redirectTo);
+    else if (navigation.canGoBack()) navigation.goBack();
+    else navigation.replace('Home');
+  }, [session, redirectTo, navigation]);
+
+  const handleClose = () => {
+    Haptics.selectionAsync();
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.replace('Home');
+  };
 
   const [mode,     setMode]     = useState<AuthMode>('login');
   const [email,    setEmail]    = useState('');
@@ -58,7 +91,7 @@ export default function AuthScreen() {
     } finally {
       setLoading(false);
     }
-    // On success → onAuthStateChange in AppNavigator automatically navigates to Home
+    // On success → the session lands and the effect above leaves this screen
   };
 
   // ── 2. Sign Up with Email ──────────────────────────────────────
@@ -102,7 +135,8 @@ export default function AuthScreen() {
     } finally {
       setLoading(false);
     }
-    // If session exists → Auth Guard automatically navigates to Home
+    // If a session exists → the effect above leaves this screen; if email
+    // confirmation is pending the user stays here with infoCheckEmail shown
   };
 
   // ── 3. Forgot Password (Supabase hosted reset flow) ─────────────
@@ -161,12 +195,24 @@ export default function AuthScreen() {
         showsVerticalScrollIndicator={false}
       >
 
+        {/* Always escapable — the user can return to Home without an account */}
+        <TouchableOpacity
+          style={S.closeRow}
+          onPress={handleClose}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={S.closeText}>{strings.auth.closeBtn}</Text>
+        </TouchableOpacity>
+
         <View style={S.logoBlock}>
           <Text style={S.wordmark}>{strings.auth.wordmark}</Text>
           <View style={S.logoRule} />
           <Text style={S.brandLabel}>CLINNA</Text>
           <Text style={S.logoSub}>{strings.auth.tagline}</Text>
         </View>
+
+        {/* Why they're here, when they arrived from a gated action */}
+        {!!redirectTo && <Text style={S.gateNote}>{strings.auth.gateNote}</Text>}
 
         <TabBar mode={mode} onChange={switchMode} />
 
@@ -321,6 +367,17 @@ const S = StyleSheet.create({
   root:    { flex: 1, backgroundColor: C.black },
   scroll:  { flex: 1 },
   content: { paddingHorizontal: SP.lg, minHeight: height },
+
+  closeRow:  { alignSelf: 'flex-start', marginBottom: SP.lg },
+  closeText: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey600 },
+
+  gateNote: {
+    fontFamily:    F.mono,
+    fontSize:      FS.xxs,
+    letterSpacing: 2.5,
+    color:         C.grey400,
+    marginBottom:  SP.lg,
+  },
 
   logoBlock: { alignItems: 'flex-start', marginBottom: SP.xxl },
   wordmark:  { fontFamily: F.brand, fontSize: 72, color: C.white, lineHeight: 80 },

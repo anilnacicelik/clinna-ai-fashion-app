@@ -15,6 +15,7 @@ export const strings = {
 
     // Buttons
     logoutBtn:        '[ LOGOUT ]',
+    signInBtn:        '[ SIGN IN ]',
     deleteAccountBtn: '[ DELETE ACCOUNT ]',
     cancelBtn:        '[ CANCEL ]',
     retryBtn:         '[ RETRY ]',
@@ -63,6 +64,10 @@ export const strings = {
 
     ctaLogin:          'ENTER THE ARCHIVE',
     ctaLoading:        '...',
+
+    closeBtn:          '[ CLOSE ]',
+    // Shown above the form when the user was sent here by a gated action
+    gateNote:          'SIGN IN TO CONTINUE',
 
     errorNetwork:      'NETWORK ERROR',
     errorWeakPassword: 'PASSWORD MUST CONTAIN AT LEAST ONE LETTER AND ONE NUMBER',
