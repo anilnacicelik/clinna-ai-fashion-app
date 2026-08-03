@@ -216,7 +216,7 @@ const CB = StyleSheet.create({
   labelRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   tierTxt:    { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.white },
   countTxt:   { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 1.5, color: C.grey600 },
-  hint:       { fontFamily: F.mono, fontSize: 9, letterSpacing: 0.5, color: C.grey600, lineHeight: 14 },
+  hint:       { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 0.5, color: C.grey400, lineHeight: 16 },
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -251,7 +251,7 @@ function ModeBar({ mode, onChange }: { mode: ScanMode; onChange: (m: ScanMode) =
 const MT = StyleSheet.create({
   root:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   btn:       { paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center', position: 'relative' },
-  lbl:       { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3.5, color: C.grey600 },
+  lbl:       { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey600 },
   lblActive: { color: C.white },
   underline: { position: 'absolute', bottom: 5, left: 24, right: 24, height: 1, backgroundColor: C.white },
   sep:       { width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.1)' },
@@ -291,7 +291,7 @@ const TS = StyleSheet.create({
   frameCur:  { borderColor: C.white },
   frameDone: { borderColor: 'rgba(255,255,255,0.45)' },
   num:       { fontFamily: F.mono, fontSize: FS.md, color: C.grey600 },
-  lbl:       { fontFamily: F.mono, fontSize: 8, letterSpacing: 2.5, color: C.grey600 },
+  lbl:       { fontFamily: F.mono, fontSize: 10, letterSpacing: 1.5, color: C.grey400 },
   lblCur:    { color: C.white },
 });
 
@@ -340,7 +340,7 @@ const BN = StyleSheet.create({
 function PermScreen({ onRequest }: { onRequest: () => void }) {
   return (
     <View style={{ flex: 1, backgroundColor: C.black, alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-      <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 4, color: C.grey600 }}>
+      <Text style={{ fontFamily: F.mono, fontSize: FS.xs, letterSpacing: 2.5, color: C.grey400 }}>
         CAMERA ACCESS REQUIRED
       </Text>
       <TouchableOpacity
@@ -749,27 +749,30 @@ const S = StyleSheet.create({
   topLabel: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2.5, color: C.white },
 
   stepOverlay: { position: 'absolute', bottom: 120, left: 0, right: 0, zIndex: 15, alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.6)', paddingVertical: 14 },
-  stepCounter: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
+  stepCounter: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2.5, color: C.grey400 },
   stepSub:     { fontFamily: F.mono, fontSize: FS.sm, color: C.white },
-  skipBtn:     { marginTop: 6, paddingVertical: 4, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
-  skipTxt:     { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey600 },
+  skipBtn:     { marginTop: 6, paddingVertical: 4, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  skipTxt:     { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey400 },
 
   shutterBar:     { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 30, alignItems: 'center', paddingTop: 16, backgroundColor: 'rgba(0,0,0,0.72)' },
   shutterRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: SP.lg, marginBottom: SP.md },
   sideControl:    { minWidth: 52, alignItems: 'center', gap: 2 },
-  sideControlTop: { fontFamily: F.mono, fontSize: 9, letterSpacing: 2, color: C.grey600 },
-  sideControlBot: { fontFamily: F.mono, fontSize: 9, letterSpacing: 2, color: C.grey600 },
+  sideControlTop: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 1, color: C.grey400 },
+  sideControlBot: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 1, color: C.grey400 },
   shutterOuter:   { width: 68, height: 68, borderRadius: 34, borderWidth: 1, borderColor: C.white, alignItems: 'center', justifyContent: 'center' },
   shutterInner:   { width: 52, height: 52, borderRadius: 26, backgroundColor: C.white },
 
   bottom:      { flex: 1, backgroundColor: C.black, paddingHorizontal: SP.lg, paddingTop: 12, justifyContent: 'flex-end' },
   modeBarWrap: { marginBottom: 10 },
 
-  readyLabel:     { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600, marginBottom: 4 },
-  readyHint:      { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 0.5, color: C.grey600, marginBottom: 10, opacity: 0.7 },
+  readyLabel:     { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2.5, color: C.grey400, marginBottom: 4 },
+  // Tells the user what to photograph — opacity on top of grey600 put it at
+  // ~3.3:1, so it was the least readable text on the most instructional screen.
+  readyHint:      { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 0.5, color: C.grey400, marginBottom: 10 },
 
   captureHint:    { position: 'absolute', bottom: 116, left: 0, right: 0, alignItems: 'center', zIndex: 6 },
-  captureHintTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 1, color: 'rgba(255,255,255,0.50)', backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 10, paddingVertical: 4 },
+  // Sits over live camera output, so it needs a stronger scrim than the rest.
+  captureHintTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 1, color: 'rgba(255,255,255,0.9)', backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 10, paddingVertical: 4 },
   authBtn:        { backgroundColor: C.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 17, paddingHorizontal: SP.lg },
   authBtnDisabled:{ backgroundColor: 'rgba(255,255,255,0.08)' },
   authBtnTxt:     { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, fontWeight: '700', color: C.black },

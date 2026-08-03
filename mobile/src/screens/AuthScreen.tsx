@@ -315,7 +315,7 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, showP
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor="rgba(255,255,255,0.2)"
+          placeholderTextColor="rgba(255,255,255,0.5)"
           secureTextEntry={secureTextEntry && !showPassword}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize ?? 'none'}
@@ -369,7 +369,9 @@ const S = StyleSheet.create({
   content: { paddingHorizontal: SP.lg, minHeight: height },
 
   closeRow:  { alignSelf: 'flex-start', marginBottom: SP.lg },
-  closeText: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey600 },
+  // The way out of a screen the user may not have meant to open — has to be
+  // findable at a glance, so it sits at grey400 (8.27:1) rather than grey600.
+  closeText: { fontFamily: F.mono, fontSize: FS.xs, letterSpacing: 2, color: C.grey400 },
 
   gateNote: {
     fontFamily:    F.mono,
@@ -385,25 +387,26 @@ const S = StyleSheet.create({
   brandLabel: { fontFamily: F.mono, fontSize: FS.xs, letterSpacing: 6, color: C.grey600, marginBottom: SP.xs },
   logoSub:   { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
 
-  // Forgot-password link — login mode only
+  // Forgot-password link — login mode only. Actionable, so grey400.
   forgotRow: { alignSelf: 'flex-end', marginTop: -SP.sm, marginBottom: SP.lg },
-  forgotText: { fontFamily: F.mono, fontSize: FS.xs, letterSpacing: 2, color: C.grey600 },
+  forgotText: { fontFamily: F.mono, fontSize: FS.xs, letterSpacing: 2, color: C.grey400 },
 
-  // Brutalist error — red monospace
+  // Brutalist error — red monospace. Sized up: an error the user can't read
+  // is an error they can't act on.
   errorText: {
     fontFamily:    F.mono,
-    fontSize:      FS.xxs,
-    color:         C.red,
-    letterSpacing: 1.5,
+    fontSize:      FS.xs,
+    color:         C.red,           // 5.92:1
+    letterSpacing: 1,
     lineHeight:    18,
     marginBottom:  SP.md,
   },
   // Info message — grey monospace
   infoText: {
     fontFamily:    F.mono,
-    fontSize:      FS.xxs,
-    color:         C.grey400,
-    letterSpacing: 1.5,
+    fontSize:      FS.xs,
+    color:         C.grey400,       // 8.27:1
+    letterSpacing: 1,
     lineHeight:    18,
     marginBottom:  SP.md,
   },
@@ -411,11 +414,13 @@ const S = StyleSheet.create({
 
 const FLD = StyleSheet.create({
   root:     { gap: 8, marginBottom: SP.lg },
-  label:    { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
+  // Field labels tell the user what to type — grey400 (8.27:1), and tracking
+  // pulled back from 3 to 2 so the letters still group into words.
+  label:    { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey400 },
   inputRow: { flexDirection: 'row', alignItems: 'center' },
   input:    { flex: 1, fontFamily: F.mono, fontSize: FS.base, color: C.white, paddingVertical: 10 },
-  eyeTxt:   { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600 },
-  underline: { height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
+  eyeTxt:   { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey400 },
+  underline: { height: 1, backgroundColor: 'rgba(255,255,255,0.25)' },
 });
 
 const CHK = StyleSheet.create({
@@ -423,13 +428,13 @@ const CHK = StyleSheet.create({
   box:   { width: 16, height: 16, borderWidth: 1, borderColor: C.white, marginTop: 2 },
   boxChecked: { backgroundColor: C.white },
   label: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey400, lineHeight: 16 },
-  note:  { fontFamily: F.mono, fontSize: 9, letterSpacing: 0.5, color: C.grey600, marginTop: 4, lineHeight: 13 },
+  note:  { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 0.5, color: C.grey600, marginTop: 4, lineHeight: 15 },
 });
 
 const TB = StyleSheet.create({
   root:      { flexDirection: 'row', marginBottom: SP.xl },
   tab:       { paddingBottom: 10, paddingRight: SP.xl },
-  lbl:       { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3.5, color: C.grey600 },
+  lbl:       { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2.5, color: C.grey600 },
   lblActive: { color: C.white },
   indicator: { position: 'absolute', bottom: 0, left: 0, right: SP.xl, height: 1, backgroundColor: C.white },
 });

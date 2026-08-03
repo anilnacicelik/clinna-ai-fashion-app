@@ -93,15 +93,26 @@ export const Shadow = {
 
 // --- FULL THEME PACKAGE FOR SILENT LUXURY SCREENS ---
 
+/**
+ * Contrast ratios below are measured against the app background (C.black,
+ * #000000) — every screen is void-black, so that is the only pairing that
+ * matters. WCAG AA for body text is 4.5:1.
+ *
+ * grey600 was #4B5563 (2.78:1 — fails AA, and fails even the 3:1 large-text
+ * floor). It is the workhorse colour for field labels, tab labels, section
+ * headings and button text across every screen, which is what App Review
+ * flagged as "hard to read type". Lightened to clear AA with headroom while
+ * staying visibly recessed from grey400 and white.
+ */
 export const C = {
   black: '#000000',
   white: '#FFFFFF',
-  faint: '#222222', 
+  faint: '#222222',       //  1.32:1 — hairlines / fills only, never text
   darkGray: '#111111',
-  gray: '#888888',
-  grey400: '#9CA3AF', // fine grey
-  grey600: '#4B5563', // dark grey
-  red: '#FF3B30'
+  gray: '#888888',        //  5.92:1
+  grey400: '#9CA3AF',     //  8.27:1 — fine grey
+  grey600: '#7A8494',     //  5.56:1 — dim grey (was #4B5563 @ 2.78:1)
+  red: '#FF3B30'          //  5.92:1
 };
 
 export const F = {
@@ -111,7 +122,9 @@ export const F = {
 };
 
 export const FS = {
-  xxs: 10, // extra-small font
+  xxs: 11, // extra-small font — 11 is the floor Apple's HIG gives for legible
+           // text; this token carries most of the UI copy (labels, buttons,
+           // captions), so it was raised from 10.
   xs: 12,
   sm: 14,
   base: 16, // base font size

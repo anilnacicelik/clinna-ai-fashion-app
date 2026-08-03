@@ -108,7 +108,9 @@ function Rule({ faint }: { faint?: boolean }) {
 function SHead({ title }: { title: string }) {
   return (
     <View style={{ paddingTop: SP.lg, paddingBottom: 8 }}>
-      <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 4, color: C.grey600 }}>
+      {/* Section headings — grey400, and tracking pulled back from 4 to 2.5 so
+          "OBSERVED SIGNALS" reads as two words rather than 15 letters. */}
+      <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2.5, color: C.grey400 }}>
         {title}
       </Text>
     </View>
@@ -152,9 +154,9 @@ function EconRow({ label, value, highlight }: { label: string; value: string; hi
 }
 const EC = StyleSheet.create({
   row:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 15 },
-  lbl:   { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
-  val:   { fontFamily: F.mono, fontSize: FS.sm, color: C.white },
-  valHL: { fontFamily: F.mono, fontSize: FS.sm, color: C.white, fontWeight: '700' },
+  lbl:   { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey400 },
+  val:   { fontFamily: F.mono, fontSize: FS.md, color: C.white },
+  valHL: { fontFamily: F.mono, fontSize: FS.md, color: C.white, fontWeight: '700' },
 });
 
 // ─── Cost breakdown bar ─────────────────────────────────────────────
@@ -181,7 +183,7 @@ const CBV = StyleSheet.create({
   track:    { flexDirection: 'row', height: 6, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },
   seg:      { height: '100%' },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  label:    { fontFamily: F.mono, fontSize: 9, letterSpacing: 1.5, color: C.grey600 },
+  label:    { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 1, color: C.grey400 },
 });
 
 // ─── ColorRow ─────────────────────────────────────────────────────
@@ -202,7 +204,7 @@ const CR = StyleSheet.create({
   root:   { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
   swatch: { width: 32, height: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
   desc:   { fontFamily: F.mono, fontSize: FS.sm, color: C.white },
-  hex:    { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, letterSpacing: 1.5 },
+  hex:    { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey400, letterSpacing: 1.5 },
 });
 
 // ─── MetaRow ──────────────────────────────────────────────────────
@@ -218,8 +220,8 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 }
 const MR = StyleSheet.create({
   root: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 12 },
-  lbl:  { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600, flex: 1 },
-  val:  { fontFamily: F.mono, fontSize: FS.xs, color: C.white, flex: 2, textAlign: 'right', lineHeight: 18 },
+  lbl:  { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey400, flex: 1 },
+  val:  { fontFamily: F.mono, fontSize: FS.sm, color: C.white, flex: 2, textAlign: 'right', lineHeight: 19 },
 });
 
 // ─── Save To Archive Button ───────────────────────────────────────
@@ -231,11 +233,13 @@ function SaveBtn({ state, onPress }: { state: SaveState; onPress: () => void }) 
     saved:  '[ SAVED  ✦ ]',
     error:  '[ RETRY SAVE ]',
   };
+  // Drives both the border and the label, so these double as text colours —
+  // the idle/saving values were 2.2:1 and 1.6:1 against black.
   const colors: Record<SaveState, string> = {
-    idle:   'rgba(255,255,255,0.25)',
-    saving: 'rgba(255,255,255,0.15)',
-    saved:  'rgba(180,210,160,0.6)',   // greenish — success
-    error:  'rgba(210,140,140,0.6)',   // reddish — error
+    idle:   'rgba(255,255,255,0.7)',   //  9.96:1
+    saving: 'rgba(255,255,255,0.45)',  //  4.41:1 — transient, non-interactive
+    saved:  'rgba(180,210,160,0.85)',  // greenish — success
+    error:  'rgba(210,140,140,0.85)',  // reddish — error
   };
   return (
     <TouchableOpacity
@@ -416,10 +420,12 @@ export default function ResultScreen() {
         </View>
         <Rule />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 20, padding: SP.xl }}>
-          <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 4, color: C.grey600 }}>
+          <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2.5, color: C.grey400 }}>
             {strings.result.notFashionTitle}
           </Text>
-          <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 0.3, color: C.grey600, textAlign: 'center', lineHeight: 18, opacity: 0.8 }}>
+          {/* This is the only explanation the user gets for an empty result —
+              it can't be the dimmest text on the screen. */}
+          <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 0.3, color: C.grey400, textAlign: 'center', lineHeight: 18 }}>
             {strings.result.notFashionNote}
           </Text>
           <TouchableOpacity style={S.outlineBtn} onPress={() => navigation.navigate('Camera')} activeOpacity={0.7}>
@@ -612,10 +618,13 @@ const S = StyleSheet.create({
   imageWrap: { width: '100%', height: Math.round(width * (4 / 3) * 0.55), marginVertical: SP.lg, overflow: 'hidden' },
   image:     { width: '100%', height: '100%' },
 
-  textureNote:     { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, lineHeight: 18, paddingBottom: SP.md, letterSpacing: 0.2 },
-  unverifiedNote:  { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, lineHeight: 18, paddingTop: SP.sm, paddingBottom: SP.md, letterSpacing: 0.3 },
-  disclaimerNote:  { fontFamily: F.mono, fontSize: 9, color: C.grey600, opacity: 0.5, lineHeight: 14, paddingTop: SP.xs, paddingBottom: SP.md, letterSpacing: 0.3 },
-  confidenceNote:  { fontFamily: F.mono, fontSize: 9, color: C.grey600, opacity: 0.6, lineHeight: 15, paddingTop: SP.sm, paddingBottom: SP.md, letterSpacing: 0.3 },
+  textureNote:     { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey400, lineHeight: 18, paddingBottom: SP.md, letterSpacing: 0.2 },
+  unverifiedNote:  { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey400, lineHeight: 18, paddingTop: SP.sm, paddingBottom: SP.md, letterSpacing: 0.3 },
+  // These two carry the "this is an estimate, not a certification" caveat and
+  // the confidence level behind the numbers above them. Both were stacking an
+  // opacity on top of an already-dim grey (≈1.6-1.9:1); the opacity is gone.
+  disclaimerNote:  { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, lineHeight: 16, paddingTop: SP.xs, paddingBottom: SP.md, letterSpacing: 0.3 },
+  confidenceNote:  { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, lineHeight: 16, paddingTop: SP.sm, paddingBottom: SP.md, letterSpacing: 0.3 },
 
   footer:    { paddingVertical: SP.lg, alignItems: 'center' },
   footerTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey600 },
@@ -624,8 +633,8 @@ const S = StyleSheet.create({
   shareBtnTxt:   { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3.5, fontWeight: '700', color: C.black },
   shareBtnArrow: { fontSize: 16, color: C.black },
 
-  outlineBtn:    { borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', paddingVertical: 17, paddingHorizontal: SP.lg, flexDirection: 'row', justifyContent: 'center' },
-  outlineBtnTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
+  outlineBtn:    { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', paddingVertical: 17, paddingHorizontal: SP.lg, flexDirection: 'row', justifyContent: 'center' },
+  outlineBtnTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey400 },
 
   hiddenCardWrap: { position: 'absolute', top: -9999, left: -9999 },
 });

@@ -269,25 +269,25 @@ const S = StyleSheet.create({
     paddingVertical:  4,
     paddingHorizontal: 8,
     borderWidth:      1,
-    borderColor:      'rgba(255,255,255,0.2)',
+    borderColor:      'rgba(255,255,255,0.35)',
   },
   creditsText: {
     fontFamily:    F.mono,
     fontSize:      FS.xxs,
     color:         C.grey400,
-    letterSpacing: 1.5,
+    letterSpacing: 1,              // tightened to hold both pills on a 320pt screen at FS.xxs 11
   },
   logoutBtn: {
     paddingVertical:  4,
     paddingHorizontal: 8,
     borderWidth:      1,
-    borderColor:      'rgba(255,255,255,0.2)',
+    borderColor:      'rgba(255,255,255,0.35)',
   },
   logoutText: {
     fontFamily:    F.mono,
     fontSize:      FS.xxs,
     color:         C.grey400,
-    letterSpacing: 1.5,
+    letterSpacing: 1,
   },
 
   // ── Wordmark ─────────────────────────────────────────────────────
@@ -331,10 +331,10 @@ const S = StyleSheet.create({
   },
   subtitle: {
     fontFamily:    'System',
-    fontSize:      9,
+    fontSize:      11,                          // was 9
     fontWeight:    '400',
-    letterSpacing: 3.5,
-    color:         'rgba(242, 240, 235, 0.22)',
+    letterSpacing: 2.5,                         // was 3.5 — wide tracking at this size reads as noise
+    color:         'rgba(242, 240, 235, 0.55)', // 5.62:1 (was 0.22 → 1.71:1)
   },
 
   // ── Button group ─────────────────────────────────────────────────
@@ -350,30 +350,30 @@ const S = StyleSheet.create({
     alignItems:      'center',
     paddingVertical: 13,
     borderWidth:     1,
-    borderColor:     'rgba(255,255,255,0.2)',
+    borderColor:     'rgba(255,255,255,0.35)',   // was 0.2 — the outline was barely visible
     backgroundColor: '#000000',
   },
   historyText: {
     fontFamily:    'Courier New',
-    fontSize:      9,
+    fontSize:      11,                           // was 9
     fontWeight:    '400',
-    letterSpacing: 4,
-    color:         'rgba(255,255,255,0.35)',
+    letterSpacing: 3,                            // was 4
+    color:         'rgba(255,255,255,0.62)',     // 7.85:1 (was 0.35 → 3.01:1, below AA)
   },
   buttonGap: { height: 10 },
   button: {
     width:           '100%',
-    borderWidth:     0.5,
-    borderColor:     'rgba(242, 240, 235, 0.28)',
+    borderWidth:     1,                          // was 0.5 — sub-pixel border rendered as a smear
+    borderColor:     'rgba(242, 240, 235, 0.45)',
     paddingVertical: 18,
     alignItems:      'center',
   },
   buttonText: {
     fontFamily:    'System',
-    fontSize:      10,
-    fontWeight:    '400',
-    letterSpacing: 5,
-    color:         'rgba(242, 240, 235, 0.6)',
+    fontSize:      12,                           // was 10 — this is the primary CTA
+    fontWeight:    '500',
+    letterSpacing: 3.5,                          // was 5
+    color:         'rgba(242, 240, 235, 0.92)',  // 15.4:1 (was 0.6 → 6.58:1)
   },
   deleteAccountBtn: {
     marginTop:  18,
@@ -383,17 +383,19 @@ const S = StyleSheet.create({
     fontFamily:    F.mono,
     fontSize:      FS.xxs,
     letterSpacing: 1.5,
-    color:         'rgba(242, 240, 235, 0.22)',
+    color:         C.grey600,                    // 5.56:1 (was rgba 0.22 → 1.71:1)
   },
   legalRow: {
     flexDirection: 'row',
     gap:           SP.md,
     marginTop:     14,
   },
+  // Privacy / Terms links — App Review looks for these, so they have to be
+  // legible, not just present. Were rgba 0.16 @ 9pt → 1.42:1, near-invisible.
   legalText: {
     fontFamily:    F.mono,
-    fontSize:      9,
+    fontSize:      11,
     letterSpacing: 1,
-    color:         'rgba(242, 240, 235, 0.16)',
+    color:         'rgba(242, 240, 235, 0.5)',   // 4.76:1
   },
 });

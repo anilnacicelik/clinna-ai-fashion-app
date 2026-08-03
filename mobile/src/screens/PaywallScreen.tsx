@@ -347,7 +347,7 @@ const S = StyleSheet.create({
     fontFamily:    F.mono,
     fontSize:      FS.xxs,
     letterSpacing: 0.3,
-    color:         C.grey600,
+    color:         C.grey400,     // what the user is buying — 8.27:1
     lineHeight:    18,
   },
 
@@ -376,7 +376,7 @@ const S = StyleSheet.create({
   },
   ctaIdle: {
     backgroundColor: 'transparent',
-    borderColor:     'rgba(255,255,255,0.2)',
+    borderColor:     'rgba(255,255,255,0.35)',
   },
   ctaTxt: {
     fontFamily:    F.mono,
@@ -385,28 +385,33 @@ const S = StyleSheet.create({
     fontWeight:    '700',
   },
   ctaTxtActive: { color: C.black },
-  ctaTxtIdle:   { color: 'rgba(255,255,255,0.3)' },
+  // "[ SELECT A PLAN ]" — the instruction that tells the user why the button
+  // won't respond yet. Was rgba 0.3 (2.52:1) and read as a rendering glitch.
+  ctaTxtIdle:   { color: 'rgba(255,255,255,0.5)' },   // 5.28:1
 
   // Restore
   restoreBtn: {
     alignItems: 'center',
     paddingVertical: SP.sm,
   },
+  // Restore Purchases — App Review requires this control to be present and
+  // usable, so it gets grey400 rather than the dim grey.
   restoreTxt: {
     fontFamily:    F.mono,
     fontSize:      FS.xxs,
     letterSpacing: 2,
-    color:         C.grey600,
+    color:         C.grey400,
   },
 
-  // Disclaimer
+  // Auto-renew terms. Guideline 3.1.2 requires these be clearly disclosed —
+  // the old 9pt grey600 at opacity 0.45 came out around 1.9:1, which is a
+  // disclosure in name only. Opacity dropped, size raised.
   disclaimer: {
     fontFamily:    F.mono,
-    fontSize:      9,
+    fontSize:      FS.xxs,
     letterSpacing: 0.3,
-    color:         C.grey600,
-    opacity:       0.45,
-    lineHeight:    14,
+    color:         C.grey600,     // 5.56:1
+    lineHeight:    16,
     textAlign:     'center',
   },
 });
@@ -478,8 +483,8 @@ const PC = StyleSheet.create({
   },
   badgeTxt: {
     fontFamily:    F.mono,
-    fontSize:      8,
-    letterSpacing: 1.5,
+    fontSize:      10,             // was 8
+    letterSpacing: 1,
     color:         C.black,
     fontWeight:    '700',
   },
@@ -490,15 +495,17 @@ const PC = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems:     'flex-end',
   },
+  // Carries the per-report unit price ("$2.00 EACH") — pricing detail, not
+  // decoration, so it reads at grey400 on black / 6.20:1 on the selected white card.
   subtitle: {
     fontFamily:    F.mono,
     fontSize:      FS.xxs,
     letterSpacing: 1,
-    color:         C.grey600,
+    color:         C.grey400,
     flex:          1,
     marginRight:   SP.sm,
   },
-  subtitleActive: { color: 'rgba(0,0,0,0.5)' },
+  subtitleActive: { color: 'rgba(0,0,0,0.62)' },
 
   price: {
     fontFamily:    F.mono,

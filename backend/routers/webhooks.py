@@ -41,7 +41,11 @@ def _webhook_secret() -> str:
         raise HTTPException(503, "REVENUECAT_WEBHOOK_SECRET not configured.")
     return secret
 
-# Mirrors mobile/src/services/purchases.ts CREDIT_AMOUNTS — keep in sync.
+# Mirrors CREDIT_PRODUCTS in mobile/src/screens/PaywallScreen.tsx — keep the
+# product IDs in sync with that catalogue and with App Store Connect.
+# The pro SKUs (clinna_pro_monthly / clinna_pro_annual) are deliberately absent:
+# the pro branch below matches by exclusion, so renaming a subscription in App
+# Store Connect does not require a backend change.
 CREDIT_AMOUNTS = {
     "clinna_credit_1":  1,
     "clinna_credit_5":  5,

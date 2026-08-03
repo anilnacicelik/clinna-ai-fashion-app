@@ -29,18 +29,33 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Restore the persisted session on startup
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setLoading(false);
-    });
+    let cancelled = false;
+
+    // Restore the persisted session on startup.
+    //
+    // This must always finish. `loading` gates the entire navigator, so a
+    // rejected promise here used to leave the app on a bare spinner with no
+    // way out — getSession() touches AsyncStorage and will hit the network to
+    // refresh an expired token, so a flaky connection or corrupted store is
+    // enough to trigger it. Failing to read a session is not an error worth
+    // blocking on: it just means signed out, and Home is public anyway.
+    supabase.auth.getSession()
+      .then(({ data: { session: s } }) => {
+        if (!cancelled) setSession(s);
+      })
+      .catch(e => {
+        console.error('[SessionContext] getSession failed — continuing signed out:', e);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     // Track session changes (login / logout / token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
     });
 
-    return () => subscription.unsubscribe();
+    return () => { cancelled = true; subscription.unsubscribe(); };
   }, []);
 
   return (

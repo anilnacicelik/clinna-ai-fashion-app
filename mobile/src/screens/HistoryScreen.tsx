@@ -137,14 +137,14 @@ const ROW = StyleSheet.create({
   resell: {
     fontFamily:    F.mono,
     fontSize:      FS.xxs,
-    color:         'rgba(255,255,255,0.5)',
+    color:         'rgba(255,255,255,0.65)',   // 8.6:1
     letterSpacing: 0.5,
   },
   meta: {
     fontFamily:    F.mono,
-    fontSize:      8,
+    fontSize:      FS.xxs,       // was 8
     color:         C.grey600,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
     marginTop:     2,
   },
 });
@@ -170,8 +170,8 @@ function EmptyState() {
 const EMPTY = StyleSheet.create({
   root:   { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, paddingTop: 80 },
   symbol: { fontFamily: F.mono, fontSize: 36, color: 'rgba(255,255,255,0.1)' },
-  title:  { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 4, color: C.grey600 },
-  sub:    { fontFamily: F.mono, fontSize: FS.xxs, color: 'rgba(255,255,255,0.2)', textAlign: 'center', lineHeight: 18 },
+  title:  { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2.5, color: C.grey400 },
+  sub:    { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, textAlign: 'center', lineHeight: 18 },
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -370,21 +370,21 @@ const S = StyleSheet.create({
   },
   hScanText: {
     fontFamily:    F.mono,
-    fontSize:      8,
+    fontSize:      10,                          // was 8
     color:         C.white,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   hLogoutBtn: {
     borderWidth:      1,
-    borderColor:      'rgba(255,255,255,0.2)',
+    borderColor:      'rgba(255,255,255,0.35)',
     paddingVertical:  3,
     paddingHorizontal: 6,
   },
   hLogoutText: {
     fontFamily:    F.mono,
-    fontSize:      8,
+    fontSize:      10,                          // was 8
     color:         C.grey400,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
 
   rule: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
@@ -392,7 +392,7 @@ const S = StyleSheet.create({
   listContent: { paddingHorizontal: SP.lg },
 
   center:   { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
-  errorTxt: { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey600, textAlign: 'center', lineHeight: 18 },
-  retryBtn: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', paddingVertical: 10, paddingHorizontal: 24, marginTop: 8 },
+  errorTxt: { fontFamily: F.mono, fontSize: FS.xs, color: C.grey400, textAlign: 'center', lineHeight: 18 },
+  retryBtn: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', paddingVertical: 10, paddingHorizontal: 24, marginTop: 8 },
   retryTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey400 },
 });

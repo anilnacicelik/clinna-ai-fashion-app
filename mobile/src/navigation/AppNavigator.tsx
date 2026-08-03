@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator } from 'react-native';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Session } from '@supabase/supabase-js';
@@ -75,12 +75,17 @@ function RootNavigator() {
     }
   }, [session]);
 
-  // Minimal loading screen while the persisted session is resolving — keeps a
+  // Loading screen while the persisted session is resolving — keeps a
   // returning user from seeing the signed-out Home for a frame.
+  //
+  // Branded rather than bare: this is the first thing shown on a cold start,
+  // and an unlabelled dark screen is easy to read as a hang or as a gate in
+  // front of the app. The wordmark makes it legible as a splash.
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: C.black, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="rgba(255,255,255,0.3)" />
+      <View style={{ flex: 1, backgroundColor: C.black, alignItems: 'center', justifyContent: 'center', gap: 20 }}>
+        <Text style={{ fontFamily: 'MissFajardose', fontSize: 72, color: '#F2F0EB' }}>Clinna</Text>
+        <ActivityIndicator color="rgba(255,255,255,0.6)" />
       </View>
     );
   }
