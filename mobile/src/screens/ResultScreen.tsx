@@ -7,6 +7,12 @@
  *   - Production cost breakdown is now always shown, independent of brand.
  *   - Shareable cost card: captures a hidden brutalist 1080x1920 card
  *     (product photo + cost breakdown + watermark) and shares it as a PNG.
+ *
+ * Sample mode (route param `sample: true`, from HomeScreen):
+ *   The screen renders a hardcoded example report with no session behind it.
+ *   Nothing touches the network or local history, the photo slot becomes a
+ *   labelled placeholder, and the account-bound actions (save, share) are
+ *   replaced by a sign-in prompt.
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
@@ -27,6 +33,8 @@ import { strings } from '../i18n/strings';
 import { ArchiveReport } from '../services/api';
 import { uploadScanImage } from '../services/storageUpload';
 import { supabase } from '../services/supabase';
+import { useSession } from '../context/SessionContext';
+import { SAMPLE_REF_NUMBER, SAMPLE_TIMESTAMP } from '../data/sampleReport';
 
 const { width } = Dimensions.get('window');
 
@@ -321,11 +329,21 @@ export default function ResultScreen() {
   const navigation = useNavigation<Nav>();
   const route      = useRoute<Route>();
   const insets     = useSafeAreaInsets();
-  const { imageUri, result: r } = route.params;
+  const { session } = useSession();
+  const { imageUri, result: r, sample = false } = route.params;
 
-  const refNumber = useRef(`CLN-${Date.now().toString(36).toUpperCase().slice(-6)}`).current;
+  // A sample carries no photo — the image slot becomes a placeholder.
+  const hasImage = !sample && !!imageUri;
+
+  // Fixed on the sample so it reads the same on every open; a real receipt is
+  // stamped when it's generated.
+  const refNumber = useRef(
+    sample ? SAMPLE_REF_NUMBER : `CLN-${Date.now().toString(36).toUpperCase().slice(-6)}`
+  ).current;
   const timestamp = useRef(
-    new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    sample
+      ? SAMPLE_TIMESTAMP
+      : new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   ).current;
 
   const opacity    = useRef(new Animated.Value(0)).current;
@@ -337,8 +355,9 @@ export default function ResultScreen() {
   const cardRef = useRef<View>(null);
 
   useEffect(() => {
-    // Offline local save — always runs
-    saveLocalHistory(imageUri, r);
+    // Offline local save — every real scan, but never the sample: it isn't
+    // the user's item and has no business in their history.
+    if (!sample) saveLocalHistory(imageUri, r);
 
     Animated.parallel([
       Animated.timing(opacity,    { toValue: 1, duration: 450, useNativeDriver: true }),
@@ -406,6 +425,20 @@ export default function ResultScreen() {
     }
   }, [saveState, imageUri, r, navigation]);
 
+  // ── Start a real analysis ────────────────────────────────────────
+  // A real scan costs a credit and hits the backend, so it needs an account.
+  // From the sample a signed-out visitor lands on Auth and resumes at Camera.
+  const handleNewAnalysis = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (session) navigation.navigate('Camera');
+    else navigation.navigate('Auth', { redirectTo: 'Camera' });
+  }, [session, navigation]);
+
+  const handleSignIn = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('Auth');
+  }, [navigation]);
+
   // ── Non-fashion guard ────────────────────────────────────────────
   if (!r.is_fashion_item) {
     return (
@@ -428,7 +461,7 @@ export default function ResultScreen() {
           <Text style={{ fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 0.3, color: C.grey400, textAlign: 'center', lineHeight: 18 }}>
             {strings.result.notFashionNote}
           </Text>
-          <TouchableOpacity style={S.outlineBtn} onPress={() => navigation.navigate('Camera')} activeOpacity={0.7}>
+          <TouchableOpacity style={S.outlineBtn} onPress={handleNewAnalysis} activeOpacity={0.7}>
             <Text style={S.outlineBtnTxt}>TRY AGAIN →</Text>
           </TouchableOpacity>
         </View>
@@ -451,10 +484,16 @@ export default function ResultScreen() {
         >
           <Text style={S.hBtn}>← HOME</Text>
         </TouchableOpacity>
-        <Text style={S.hTitle}>RECEIPT</Text>
-        <TouchableOpacity onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} disabled={shareState === 'preparing'}>
-          <Text style={S.hBtn}>{shareState === 'preparing' ? '...' : 'SHARE ↑'}</Text>
-        </TouchableOpacity>
+        <Text style={S.hTitle}>{sample ? strings.result.sampleTitle : 'RECEIPT'}</Text>
+        {/* Share captures the product photo — a sample has none, so the
+            action isn't offered rather than offered and failing. */}
+        {sample ? (
+          <View style={{ width: 52 }} />
+        ) : (
+          <TouchableOpacity onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} disabled={shareState === 'preparing'}>
+            <Text style={S.hBtn}>{shareState === 'preparing' ? '...' : 'SHARE ↑'}</Text>
+          </TouchableOpacity>
+        )}
       </View>
       <Rule />
 
@@ -464,6 +503,15 @@ export default function ResultScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+
+          {/* Sample banner — first thing in the scroll so the example can
+              never be read as an analysis of the user's own item. */}
+          {sample && (
+            <View style={S.sampleBanner}>
+              <Text style={S.sampleBannerTitle}>{strings.result.sampleBannerTitle}</Text>
+              <Text style={S.sampleBannerNote}>{strings.result.sampleBannerNote}</Text>
+            </View>
+          )}
 
           {/* Receipt meta */}
           <View style={S.receiptMeta}>
@@ -504,9 +552,15 @@ export default function ResultScreen() {
           </Text>
           <Rule />
 
-          {/* Image */}
+          {/* Image — placeholder when there's no photo behind the report */}
           <View style={S.imageWrap}>
-            <Image source={{ uri: imageUri }} style={S.image} resizeMode="cover" />
+            {hasImage ? (
+              <Image source={{ uri: imageUri }} style={S.image} resizeMode="cover" />
+            ) : (
+              <View style={S.imagePlaceholder}>
+                <Text style={S.imagePlaceholderTxt}>{strings.result.samplePlaceholder}</Text>
+              </View>
+            )}
           </View>
 
           {/* Colorway */}
@@ -562,34 +616,57 @@ export default function ResultScreen() {
 
           {/* ── CTA blok ── */}
 
-          {/* SHARE — primary, solid white */}
-          <TouchableOpacity style={S.shareBtn} onPress={handleShare} activeOpacity={0.8} disabled={shareState === 'preparing'}>
-            <Text style={S.shareBtnTxt}>{shareState === 'preparing' ? 'PREPARING...' : 'SHARE COST CARD'}</Text>
-            <Text style={S.shareBtnArrow}>↑</Text>
-          </TouchableOpacity>
+          {sample ? (
+            <>
+              {/* Save and share are account-bound and there's nothing here to
+                  save anyway — say so instead of showing dead buttons. */}
+              <Text style={S.sampleGateNote}>{strings.result.sampleGateNote}</Text>
 
-          {/* SAVE TO ARCHIVE — brutalist outline, color by state */}
-          <View style={{ height: 8 }} />
-          <SaveBtn state={saveState} onPress={handleSave} />
+              {/* Primary out of the sample: run a real scan. */}
+              <TouchableOpacity style={[S.shareBtn, S.sampleCtaBtn]} onPress={handleNewAnalysis} activeOpacity={0.8}>
+                <Text style={S.shareBtnTxt}>{strings.result.sampleRunBtn}</Text>
+              </TouchableOpacity>
 
-          <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 8 }} />
+              {!session && (
+                <>
+                  <View style={{ height: 8 }} />
+                  <TouchableOpacity style={S.outlineBtn} onPress={handleSignIn} activeOpacity={0.7}>
+                    <Text style={S.outlineBtnTxt}>{strings.result.sampleSignInBtn}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {/* SHARE — primary, solid white */}
+              <TouchableOpacity style={S.shareBtn} onPress={handleShare} activeOpacity={0.8} disabled={shareState === 'preparing'}>
+                <Text style={S.shareBtnTxt}>{shareState === 'preparing' ? 'PREPARING...' : 'SHARE COST CARD'}</Text>
+                <Text style={S.shareBtnArrow}>↑</Text>
+              </TouchableOpacity>
 
-          {/* NEW ANALYSIS — secondary outline */}
-          <TouchableOpacity
-            style={S.outlineBtn}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation.navigate('Camera'); }}
-            activeOpacity={0.7}
-          >
-            <Text style={S.outlineBtnTxt}>NEW ANALYSIS →</Text>
-          </TouchableOpacity>
+              {/* SAVE TO ARCHIVE — brutalist outline, color by state */}
+              <View style={{ height: 8 }} />
+              <SaveBtn state={saveState} onPress={handleSave} />
+
+              <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 8 }} />
+
+              {/* NEW ANALYSIS — secondary outline */}
+              <TouchableOpacity style={S.outlineBtn} onPress={handleNewAnalysis} activeOpacity={0.7}>
+                <Text style={S.outlineBtnTxt}>NEW ANALYSIS →</Text>
+              </TouchableOpacity>
+            </>
+          )}
 
         </Animated.View>
       </ScrollView>
 
-      {/* Hidden share card — rendered off-screen, captured on demand */}
-      <View style={S.hiddenCardWrap} pointerEvents="none">
-        <ShareCard ref={cardRef} imageUri={imageUri} r={r} />
-      </View>
+      {/* Hidden share card — rendered off-screen, captured on demand.
+          Skipped in sample mode: no photo to capture, no share to offer. */}
+      {!sample && (
+        <View style={S.hiddenCardWrap} pointerEvents="none">
+          <ShareCard ref={cardRef} imageUri={imageUri} r={r} />
+        </View>
+      )}
 
     </View>
   );
@@ -617,6 +694,24 @@ const S = StyleSheet.create({
 
   imageWrap: { width: '100%', height: Math.round(width * (4 / 3) * 0.55), marginVertical: SP.lg, overflow: 'hidden' },
   image:     { width: '100%', height: '100%' },
+  imagePlaceholder: {
+    width: '100%', height: '100%',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  imagePlaceholderTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey600 },
+
+  // ── Sample mode ──────────────────────────────────────────────────
+  sampleBanner: {
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    padding: SP.md, marginTop: SP.lg, gap: 6,
+  },
+  sampleBannerTitle: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3.5, color: C.white },
+  sampleBannerNote:  { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey400, lineHeight: 17, letterSpacing: 0.3 },
+  sampleGateNote:    { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey400, lineHeight: 17, letterSpacing: 0.3, paddingBottom: SP.md },
+  // shareBtn splits label and arrow apart; the sample CTA is a single label.
+  sampleCtaBtn:      { justifyContent: 'center' as const },
 
   textureNote:     { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey400, lineHeight: 18, paddingBottom: SP.md, letterSpacing: 0.2 },
   unverifiedNote:  { fontFamily: F.mono, fontSize: FS.xxs, color: C.grey400, lineHeight: 18, paddingTop: SP.sm, paddingBottom: SP.md, letterSpacing: 0.3 },

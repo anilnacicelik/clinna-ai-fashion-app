@@ -33,7 +33,12 @@ export type RootStackParamList = {
   Auth:    { redirectTo?: AuthRedirect } | undefined;
   Home:    undefined;
   Camera:  undefined;
-  Result:  { imageUri: string; result: ArchiveReport };
+  /**
+   * `sample: true` renders a hardcoded example report with no session behind
+   * it — see src/data/sampleReport.ts. `imageUri` is empty in that mode and
+   * ResultScreen draws a placeholder in place of the photo.
+   */
+  Result:  { imageUri: string; result: ArchiveReport; sample?: boolean };
   History: undefined;
   Paywall: undefined;
 };
@@ -105,6 +110,9 @@ function RootNavigator() {
 
         {/* ── Session-only — entered through requireAuth ────────────── */}
         <Stack.Screen name="Camera" component={CameraScreen} />
+        {/* Result is reachable without a session in sample mode — the
+            account-bound actions on it (save, share) are what gate, not the
+            screen itself. */}
         <Stack.Screen
           name="Result"
           component={ResultScreen}

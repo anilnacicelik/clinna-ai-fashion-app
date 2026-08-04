@@ -28,6 +28,7 @@ import { C, F, FS, SP } from '../theme';
 import { AuthRedirect, RootStackParamList } from '../navigation/AppNavigator';
 import { strings } from '../i18n/strings';
 import { PRIVACY_URL, TERMS_URL } from '../config/legal';
+import { SAMPLE_REPORT } from '../data/sampleReport';
 
 const { width, height } = Dimensions.get('window');
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -80,6 +81,13 @@ export default function HomeScreen() {
   const handleAnalyze = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     requireAuth('Camera');
+  };
+
+  // Sample report — no session, no backend call, no scan spent. This is the
+  // "see what the app does before signing up" path; ANALYZE stays gated.
+  const handleSample = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('Result', { imageUri: '', result: SAMPLE_REPORT, sample: true });
   };
 
   const handleGetCredits = () => {
@@ -197,6 +205,17 @@ export default function HomeScreen() {
 
         <TouchableOpacity style={S.button} onPress={handleAnalyze} activeOpacity={0.55}>
           <Text style={S.buttonText}>{strings.home.analyzeBtn}</Text>
+        </TouchableOpacity>
+
+        {/* Sits under the primary CTA and reads as the lighter option: no
+            border, no account, no scan — just the example report. */}
+        <TouchableOpacity
+          style={S.sampleButton}
+          onPress={handleSample}
+          activeOpacity={0.55}
+          hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
+        >
+          <Text style={S.sampleText}>{strings.home.sampleBtn}</Text>
         </TouchableOpacity>
 
         {/* Account-only chrome — a signed-out visitor has no count to show
@@ -374,6 +393,18 @@ const S = StyleSheet.create({
     fontWeight:    '500',
     letterSpacing: 3.5,                          // was 5
     color:         'rgba(242, 240, 235, 0.92)',  // 15.4:1 (was 0.6 → 6.58:1)
+  },
+  // Tertiary CTA — text-only so it never competes with ANALYZE, but at the
+  // same contrast as the legal links so it stays legible.
+  sampleButton: {
+    marginTop:  12,
+    alignItems: 'center',
+  },
+  sampleText: {
+    fontFamily:    F.mono,
+    fontSize:      11,
+    letterSpacing: 1.5,
+    color:         'rgba(242, 240, 235, 0.55)',  // 5.62:1
   },
   deleteAccountBtn: {
     marginTop:  18,

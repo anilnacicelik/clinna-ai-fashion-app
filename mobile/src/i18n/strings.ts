@@ -88,6 +88,7 @@ export const strings = {
     subtitle:        'ARCHIVE · ANALYZE · VALUE',
     historyBtn:      'ARCHIVE HISTORY',
     analyzeBtn:      'ANALYZE',
+    sampleBtn:       '[ VIEW SAMPLE REPORT ]',
   },
   camera: {
     hintBeforeCapture: 'Fit the full garment in frame · no other objects',
@@ -99,6 +100,17 @@ export const strings = {
   result:  {
     notFashionTitle: 'NOT A FASHION ITEM',
     notFashionNote:  'No fashion item detected. This scan has been counted.',
+
+    // Sample mode — hardcoded example report, no session, no scan spent
+    sampleTitle:       'SAMPLE',
+    sampleBannerTitle: 'SAMPLE REPORT',
+    sampleBannerNote:  'Example output from a Detailed Scan. Not your item — no photo was analysed and no scan was used.',
+    samplePlaceholder: 'PRODUCT PHOTO',
+    sampleGateNote:    'Saving to your archive and sharing a cost card need an account.',
+    // Kept short — both render at wide tracking inside full-width buttons,
+    // and must not wrap on a 320pt screen.
+    sampleSignInBtn:   'SIGN IN TO SAVE',
+    sampleRunBtn:      'SCAN YOUR OWN ITEM →',
   },
   history: {},
   paywall: {
