@@ -4,7 +4,7 @@
  * Includes 429 quota countdown and detailed error logging.
  */
 import { useState, useCallback, useRef } from 'react';
-import { quickScan, deepAuth, ArchiveReport, ApiError, DeepAuthImages, ScanMode } from '../services/api';
+import { quickScan, deepAuth, guestQuickScan, ArchiveReport, ApiError, DeepAuthImages, ScanMode } from '../services/api';
 import { compressForUpload } from '../services/imageCompress';
 
 export type AnalysisState =
@@ -66,6 +66,20 @@ export function useAnalysis() {
     }
   }, [_handleError]);
 
+  const runGuestQuickScan = useCallback(async (imageUri: string) => {
+    setState({ status: 'loading', mode: 'quick_scan' });
+    try {
+      console.log('[CLINNA] compressForUpload start (guest) — uri:', imageUri.slice(-50));
+      const compressed = await compressForUpload(imageUri);
+      console.log('[CLINNA] compressForUpload done (guest)  — uri:', compressed.slice(-50));
+      const data = await guestQuickScan(compressed);
+      setState({ status: 'success', data });
+    } catch (err) {
+      console.error('[CLINNA] Guest quick scan error:', err);
+      _handleError(err);
+    }
+  }, [_handleError]);
+
   const runDeepAuth = useCallback(async (imgs: DeepAuthImages) => {
     setState({ status: 'loading', mode: 'deep_auth' });
     try {
@@ -104,5 +118,5 @@ export function useAnalysis() {
 
   const reset = useCallback(() => { clearTimer(); setState({ status: 'idle' }); }, []);
 
-  return { state, runQuickScan, runDeepAuth, runAccScan, reset };
+  return { state, runQuickScan, runGuestQuickScan, runDeepAuth, runAccScan, reset };
 }

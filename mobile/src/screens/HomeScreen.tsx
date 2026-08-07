@@ -29,6 +29,7 @@ import { AuthRedirect, RootStackParamList } from '../navigation/AppNavigator';
 import { strings } from '../i18n/strings';
 import { PRIVACY_URL, TERMS_URL } from '../config/legal';
 import { SAMPLE_REPORT } from '../data/sampleReport';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -78,9 +79,23 @@ export default function HomeScreen() {
     else navigation.navigate('Auth', { redirectTo: dest });
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    requireAuth('Camera');
+    if (session) {
+      navigation.navigate('Camera');
+    } else {
+      // Apple 5.1.1(v): Allow guest users 1 free scan without login
+      try {
+        const used = await AsyncStorage.getItem('@clinna_guest_scan_used');
+        if (used === 'true') {
+          navigation.navigate('Auth', { redirectTo: 'Camera' });
+        } else {
+          navigation.navigate('Camera', { guestMode: true });
+        }
+      } catch {
+        navigation.navigate('Camera', { guestMode: true });
+      }
+    }
   };
 
   // Sample report — no session, no backend call, no scan spent. This is the

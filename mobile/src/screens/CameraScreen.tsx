@@ -33,6 +33,9 @@ import { strings } from '../i18n/strings';
 import { useAnalysis } from '../hooks/useAnalysis';
 import { useScansLeft } from '../hooks/useScansLeft';
 import { DeepAuthImages } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRoute, RouteProp } from '@react-navigation/native';
+import { useSession } from '../context/SessionContext';
 
 async function playSFX(_: 'shutter' | 'tap' | 'success') { /* stub */ }
 
@@ -362,6 +365,9 @@ function PermScreen({ onRequest }: { onRequest: () => void }) {
 
 export default function CameraScreen() {
   const navigation = useNavigation<Nav>();
+  const route      = useRoute<RouteProp<RootStackParamList, 'Camera'>>();
+  const { guestMode = false } = route.params ?? {};
+  const { session } = useSession();
   const insets     = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -384,7 +390,7 @@ export default function CameraScreen() {
   const actionSlide  = useRef(new Animated.Value(56)).current;
   const actionFade   = useRef(new Animated.Value(0)).current;
 
-  const { state, runQuickScan, runDeepAuth, runAccScan, reset } = useAnalysis();
+  const { state, runQuickScan, runGuestQuickScan, runDeepAuth, runAccScan, reset } = useAnalysis();
 
   // Entitlement state
   const { scansLeft, credits, isProActive, decrement, useCredit } = useScansLeft();
@@ -399,9 +405,18 @@ export default function CameraScreen() {
       const method = entitlementMethodRef.current;
       entitlementMethodRef.current = null;
 
+      const preview = mode === 'quick_scan' ? capturedUri : deepUris[0];
+
+      // Guest mode — mark the free scan as used and navigate without saving
+      if (guestMode) {
+        AsyncStorage.setItem('@clinna_guest_scan_used', 'true').catch(() => {});
+        navigation.replace('Result', { imageUri: preview!, result: state.data, guestMode: true });
+        reset();
+        return;
+      }
+
       // Navigate immediately — the report is ready, don't make the user
       // wait on the entitlement sync round-trip to see it.
-      const preview = mode === 'quick_scan' ? capturedUri : deepUris[0];
       navigation.replace('Result', { imageUri: preview!, result: state.data });
       reset();
 
@@ -535,6 +550,14 @@ export default function CameraScreen() {
   const handleAnalyze = useCallback(() => {
     hap.tap(); playSFX('tap');
 
+    // Guest mode — skip entitlement gate, only allow quick_scan
+    if (guestMode) {
+      if (mode !== 'quick_scan' || !capturedUri) return;
+      entitlementMethodRef.current = null;
+      runGuestQuickScan(capturedUri);
+      return;
+    }
+
     // Entitlement gate — no scans, no credits, not pro → Paywall
     if (scansLeft === 0 && credits === 0 && !isProActive) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -565,7 +588,7 @@ export default function CameraScreen() {
       const imgs: DeepAuthImages = { product, ...(label ? { label } : {}), ...(tag ? { tag } : {}) };
       runDeepAuth(imgs);
     }
-  }, [mode, capturedUri, deepUris, runQuickScan, runDeepAuth, runAccScan, scansLeft, credits, isProActive]);
+  }, [mode, capturedUri, deepUris, runQuickScan, runGuestQuickScan, runDeepAuth, runAccScan, scansLeft, credits, isProActive, guestMode]);
 
   // ── Skip 3rd step ─────────────────────────────────────────────
   const handleSkip3 = useCallback(() => {
@@ -679,7 +702,7 @@ export default function CameraScreen() {
       {/* ════════════ BOTTOM PANEL ══════════════════════════════ */}
       <View style={[S.bottom, { paddingBottom: insets.bottom + 12 }]}>
 
-        {!capturedUri && deepStep === 0 && (
+        {!capturedUri && deepStep === 0 && !guestMode && (
           <View style={S.modeBarWrap}>
             <ModeBar mode={mode} onChange={handleModeChange} />
           </View>

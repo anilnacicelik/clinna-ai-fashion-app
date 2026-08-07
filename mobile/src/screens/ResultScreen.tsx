@@ -330,7 +330,7 @@ export default function ResultScreen() {
   const route      = useRoute<Route>();
   const insets     = useSafeAreaInsets();
   const { session } = useSession();
-  const { imageUri, result: r, sample = false } = route.params;
+  const { imageUri, result: r, sample = false, guestMode = false } = route.params;
 
   // A sample carries no photo — the image slot becomes a placeholder.
   const hasImage = !sample && !!imageUri;
@@ -357,7 +357,7 @@ export default function ResultScreen() {
   useEffect(() => {
     // Offline local save — every real scan, but never the sample: it isn't
     // the user's item and has no business in their history.
-    if (!sample) saveLocalHistory(imageUri, r);
+    if (!sample && !guestMode) saveLocalHistory(imageUri, r);
 
     Animated.parallel([
       Animated.timing(opacity,    { toValue: 1, duration: 450, useNativeDriver: true }),
@@ -513,6 +513,21 @@ export default function ResultScreen() {
             </View>
           )}
 
+          {/* Guest mode banner — Apple 5.1.1(v): user tried the app without
+              registering, nudge them to sign up to save and get more scans. */}
+          {guestMode && !sample && (
+            <TouchableOpacity
+              style={S.sampleBanner}
+              onPress={() => navigation.navigate('Auth')}
+              activeOpacity={0.7}
+            >
+              <Text style={S.sampleBannerTitle}>[ SIGN UP TO SAVE THIS REPORT ]</Text>
+              <Text style={S.sampleBannerNote}>
+                Create a free account to save reports, view scan history, and unlock more scans.
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* Receipt meta */}
           <View style={S.receiptMeta}>
             <View>
@@ -635,6 +650,24 @@ export default function ResultScreen() {
                   </TouchableOpacity>
                 </>
               )}
+            </>
+          ) : guestMode ? (
+            <>
+              {/* Guest mode — prompt sign-up, no save */}
+              <Text style={S.sampleGateNote}>
+                Sign up for a free account to save reports, view history, and get more scans.
+              </Text>
+              <TouchableOpacity
+                style={[S.shareBtn, S.sampleCtaBtn]}
+                onPress={() => navigation.navigate('Auth', { redirectTo: 'Camera' })}
+                activeOpacity={0.8}
+              >
+                <Text style={S.shareBtnTxt}>[ SIGN UP & CONTINUE SCANNING ]</Text>
+              </TouchableOpacity>
+              <View style={{ height: 8 }} />
+              <TouchableOpacity style={S.outlineBtn} onPress={() => navigation.navigate('Home')} activeOpacity={0.7}>
+                <Text style={S.outlineBtnTxt}>← BACK TO HOME</Text>
+              </TouchableOpacity>
             </>
           ) : (
             <>

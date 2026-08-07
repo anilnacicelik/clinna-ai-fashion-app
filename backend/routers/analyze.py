@@ -47,6 +47,29 @@ async def analyze_quick(
     return report
 
 
+# ── GUEST QUICK SCAN (Apple 5.1.1v) ──────────────────────────────
+# No auth required — strict rate limit to prevent abuse.
+
+@router.post("/analyze/guest", response_model=ArchiveReport)
+@limiter.limit("3/hour")
+async def analyze_guest(
+    request: Request,
+    image: UploadFile = File(..., description="Single garment photo (guest)"),
+):
+    """Guest Quick Scan — no auth, strict rate limit. Apple 5.1.1(v) compliance."""
+    mime = _validate_image(image)
+    data = await image.read()
+    if len(data) > MAX_SIZE:
+        raise HTTPException(413, "Image too large. Max 10 MB.")
+
+    t0 = time.monotonic()
+    report = await run_archive_analysis(images=[(data, mime)], scan_mode="quick_scan")
+    report.processing_ms = int((time.monotonic() - t0) * 1000)
+    report.scan_mode     = "quick_scan"
+    report.image_count   = 1
+    return report
+
+
 # ── DEEP AUTH ─────────────────────────────────────────────────────
 
 @router.post("/analyze/deep", response_model=ArchiveReport)

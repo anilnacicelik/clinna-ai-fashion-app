@@ -32,13 +32,13 @@ export type AuthRedirect = 'Camera' | 'History' | 'Paywall';
 export type RootStackParamList = {
   Auth:    { redirectTo?: AuthRedirect } | undefined;
   Home:    undefined;
-  Camera:  undefined;
+  Camera:  { guestMode?: boolean } | undefined;
   /**
    * `sample: true` renders a hardcoded example report with no session behind
    * it — see src/data/sampleReport.ts. `imageUri` is empty in that mode and
    * ResultScreen draws a placeholder in place of the photo.
    */
-  Result:  { imageUri: string; result: ArchiveReport; sample?: boolean };
+  Result:  { imageUri: string; result: ArchiveReport; sample?: boolean; guestMode?: boolean };
   History: undefined;
   Paywall: undefined;
 };

@@ -292,6 +292,17 @@ export async function quickScan(imageUri: string): Promise<ArchiveReport> {
   return handleResponse(res);
 }
 
+/** Guest Quick Scan — no auth required, for Apple 5.1.1(v) compliance.
+ *  Identical to quickScan but sends no Authorization header. */
+export async function guestQuickScan(imageUri: string): Promise<ArchiveReport> {
+  console.log('[CLINNA API] guestQuickScan start (no auth)');
+  const body = new FormData();
+  body.append('image', uriToFormPart(imageUri) as any);
+
+  const res = await xhrPost(`${BASE_URL}/analyze/guest`, body, TIMEOUT_QUICK_MS);
+  return handleResponse(res);
+}
+
 /** Deep Auth / Accessory — 1-3 images; only product is required */
 export async function deepAuth(imgs: DeepAuthImages, scanMode: 'deep_auth' | 'acc' = 'deep_auth'): Promise<ArchiveReport> {
   const imgCount = [imgs.product, imgs.label, imgs.tag].filter(Boolean).length;

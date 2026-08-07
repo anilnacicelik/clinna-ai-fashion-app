@@ -143,6 +143,22 @@ export default function PaywallScreen() {
     <View style={S.root}>
       <StatusBar barStyle="light-content" backgroundColor={C.black} />
 
+      {/* ── Close button (Apple 3.1.2) — always visible, not scrolled ── */}
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={{
+          position: 'absolute',
+          top: insets.top + 14,
+          right: SP.lg,
+          zIndex: 10,
+          padding: 8,
+        }}
+        activeOpacity={0.6}
+        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+      >
+        <Text style={{ fontFamily: F.mono, fontSize: 20, color: C.white, fontWeight: '300' }}>✕</Text>
+      </TouchableOpacity>
+
       <ScrollView
         contentContainerStyle={[
           S.scroll,
