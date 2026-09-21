@@ -10,3 +10,6 @@
 .vscode/
 .idea/
 *.swp
+
+# App Store Connect API keys
+*.p8
