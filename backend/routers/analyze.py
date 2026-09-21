@@ -6,8 +6,9 @@ POST /api/v1/analyze/deep     — deep_auth:  1-3 images
 """
 import time
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request, Depends
-from models.schemas import ArchiveReport
+from models.schemas import ArchiveReport, VintedListing
 from analyzers.archivist import run_archive_analysis
+from analyzers.listing import run_listing_analysis
 from services.auth import require_user
 from services.rate_limit import limiter
 
@@ -106,3 +107,25 @@ async def analyze_deep(
     report.scan_mode     = scan_mode
     report.image_count   = len(images)
     return report
+
+
+# ── VINTED LISTING ────────────────────────────────────────────────
+
+@router.post("/analyze/listing", response_model=VintedListing)
+@limiter.limit("20/minute")
+async def analyze_listing(
+    request: Request,
+    image: UploadFile = File(..., description="Single garment photo for listing"),
+    user_id: str = Depends(require_user),
+):
+    """Vinted Listing — single image, generates marketplace-ready listing draft."""
+    mime = _validate_image(image)
+    data = await image.read()
+    if len(data) > MAX_SIZE:
+        raise HTTPException(413, "Image too large. Max 10 MB.")
+
+    t0 = time.monotonic()
+    listing = await run_listing_analysis(images=[(data, mime)])
+    listing.processing_ms = int((time.monotonic() - t0) * 1000)
+    return listing
+

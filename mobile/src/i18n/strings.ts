@@ -85,13 +85,31 @@ export const strings = {
     infoFmt:           (msg: string) => `[ ${msg} ]`,
   },
   home: {
-    subtitle:        'ARCHIVE · ANALYZE · VALUE',
+    // Positioning line, sits directly under the wordmark where the old
+    // 'ARCHIVE · ANALYZE · VALUE' subtitle was.
+    subtitle:        'Before you buy it, scan it.',
     historyBtn:      'ARCHIVE HISTORY',
     analyzeBtn:      'ANALYZE',
     sampleBtn:       '[ VIEW SAMPLE REPORT ]',
+
+    // v2 — primary CTA is the in-store "before you buy" scan; the two
+    // long-form modes drop to a secondary row underneath it.
+    buyBtn:          'SCAN BEFORE YOU BUY',
+    fullAnalysisBtn: 'FULL ANALYSIS',
+    listingBtn:      'VINTED LISTING',
+    feedbackBtn:     '[ FEEDBACK ]',
   },
   camera: {
     hintBeforeCapture: 'Fit the full garment in frame · no other objects',
+    // Before-you-buy: tag price step, shown after the photo and before the
+    // scan is sent. Optional — SKIP runs the same scan without a price.
+    tagPriceTitle:     'TAG PRICE',
+    tagPriceLabel:     'PRICE ON THE TAG',
+    tagPriceNote:      'Optional. Skip it and you still get the production cost estimate.',
+    tagPricePlaceholder: '0',
+    tagPriceContinue:  'CONTINUE',
+    tagPriceSkip:      '[ SKIP ]',
+    buyModeLabel:      'BEFORE YOU BUY',
     hintAfterCapture:  'Full garment in frame? Retake if cut off.',
     syncIssueTitle:    '[ SYNC ISSUE ]',
     syncIssueScan:     'YOUR SCAN COUNT COULD NOT BE UPDATED. CHECK YOUR CONNECTION — YOUR REPORT IS STILL READY.',
@@ -112,6 +130,63 @@ export const strings = {
     sampleSignInBtn:   'SIGN IN TO SAVE',
     sampleRunBtn:      'SCAN YOUR OWN ITEM →',
   },
+  buy: {
+    title:            'BEFORE YOU BUY',
+    // Headline formats — "~" stays: every number here is an estimate.
+    headlineWithPrice: (price: string, cost: string) => `${price} → ~${cost} TO MAKE`,
+    headlineCostOnly:  (cost: string) => `~${cost} TO MAKE`,
+    markupLine:        (pct: number) => `${pct}% OF THE PRICE IS MARKUP`,
+    // Shown instead of the markup line when the tag price is at or below the
+    // estimated production cost — no markup to report, and no judgement made.
+    nearCostLine:      'PRICED CLOSE TO PRODUCTION COST',
+    breakdownOpen:     '[ + BREAKDOWN ]',
+    breakdownClose:    '[ – BREAKDOWN ]',
+    labelMaterial:     'MATERIAL',
+    labelLabor:        'LABOR (CMT)',
+    labelBrand:        'BRAND',
+    shareBtn:          '[ SHARE ]',
+    sharePreparing:    '[ PREPARING... ]',
+    fullReportBtn:     '[ FULL REPORT ]',
+    feedbackBtn:       '[ FEEDBACK ]',
+    disclaimer:        'AI estimate from a single photo — production cost only, not a valuation or buying advice.',
+    notFashionTitle:   'NOT A FASHION ITEM',
+    notFashionNote:    'No fashion item detected. This scan has been counted.',
+    tryAgainBtn:       'TRY AGAIN →',
+  },
+
+  archive: {
+    // Every successful scan is filed automatically — the row is a status, not
+    // a button. REMOVE is the only action left on it.
+    savedLabel:   '[ SAVED TO ARCHIVE ]',
+    savingLabel:  '[ SAVING TO ARCHIVE... ]',
+    failedLabel:  '[ NOT SAVED — TAP TO RETRY ]',
+    removedLabel: '[ REMOVED FROM ARCHIVE ]',
+    removeBtn:    '[ REMOVE ]',
+    removingBtn:  '[ ... ]',
+    removeTitle:  '[ REMOVE FROM ARCHIVE ]',
+    removeBody:   'THIS SCAN WILL BE REMOVED FROM YOUR ARCHIVE. THIS CANNOT BE UNDONE.',
+    removeFailedTitle: '[ REMOVE FAILED ]',
+    removeFailedBody:  'COULD NOT REMOVE THIS SCAN. CHECK YOUR CONNECTION AND TRY AGAIN.',
+    modeBuy:      'BUY',
+    modeFull:     'FULL',
+    modeListing:  'LISTING',
+    tagPriceMeta: (price: string) => `TAG ${price}`,
+    markupMeta:   (pct: number) => `${pct}% MARKUP`,
+  },
+
+  feedback: {
+    title:        'FEEDBACK',
+    intro:        'Tell us what is missing, broken, or confusing. We read every message.',
+    label:        'YOUR MESSAGE',
+    placeholder:  'What would make this better?',
+    sendBtn:      '[ SEND ]',
+    sendingBtn:   '[ SENDING... ]',
+    sentBtn:      '[ THANKS — WE READ EVERY MESSAGE ]',
+    closeBtn:     '[ CLOSE ]',
+    errorEmpty:   'WRITE SOMETHING FIRST.',
+    errorFailed:  'COULD NOT SEND YOUR MESSAGE. CHECK YOUR CONNECTION AND TRY AGAIN.',
+  },
+
   history: {},
   paywall: {
     storeUnavailable: 'STORE NOT AVAILABLE — TRY AGAIN LATER.',

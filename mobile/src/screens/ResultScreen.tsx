@@ -8,6 +8,13 @@
  *   - Shareable cost card: captures a hidden brutalist 1080x1920 card
  *     (product photo + cost breakdown + watermark) and shares it as a PNG.
  *
+ * v2:
+ *   - The scan is filed in the archive automatically when the screen opens
+ *     (useAutoArchive), so SAVE TO ARCHIVE is gone — an ArchiveStatus row and
+ *     a REMOVE action stand in its place.
+ *   - The share card moved to components/CostCard so BuyResultScreen can share
+ *     the same object; this screen renders it unchanged.
+ *
  * Sample mode (route param `sample: true`, from HomeScreen):
  *   The screen renders a hardcoded example report with no session behind it.
  *   Nothing touches the network or local history, the photo slot becomes a
@@ -20,7 +27,6 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Image,
   ScrollView, Animated, StatusBar, Dimensions, Alert,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
@@ -31,76 +37,27 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { C, F, FS, SP } from '../theme';
 import { strings } from '../i18n/strings';
 import { ArchiveReport } from '../services/api';
-import { uploadScanImage } from '../services/storageUpload';
-import { supabase } from '../services/supabase';
 import { useSession } from '../context/SessionContext';
 import { SAMPLE_REF_NUMBER, SAMPLE_TIMESTAMP } from '../data/sampleReport';
+import CostCard, { CostBar } from '../components/CostCard';
+import { formatUsd } from '../utils/cost';
+import { useAutoArchive } from '../hooks/useAutoArchive';
+import ArchiveStatus from '../components/ArchiveStatus';
+import { track } from '../services/analytics';
+import { maybeRequestReview } from '../services/review';
 
 const { width } = Dimensions.get('window');
 
 type Nav   = NativeStackNavigationProp<RootStackParamList, 'Result'>;
 type Route = RouteProp<RootStackParamList, 'Result'>;
-type SaveState  = 'idle' | 'saving' | 'saved' | 'error';
 type ShareState = 'idle' | 'preparing';
 
 // ─── Formatting helpers ─────────────────────────────────────────────
-
-function formatUsd(n: number): string {
-  return `$${Math.round(n).toLocaleString('en-US')}`;
-}
 
 function modeLabel(mode: ArchiveReport['scan_mode']): string {
   if (mode === 'deep_auth') return 'DETAILED';
   if (mode === 'acc')       return 'ACCESSORY';
   return 'QUICK';
-}
-
-// ─── AsyncStorage history (offline fallback) ──────────────────────
-
-async function saveLocalHistory(imageUri: string, report: ArchiveReport) {
-  try {
-    const raw = await AsyncStorage.getItem('@clinna_history');
-    const arr = raw ? JSON.parse(raw) : [];
-    arr.unshift({ id: `${Date.now()}`, timestamp: new Date().toISOString(), imageUri, report });
-    await AsyncStorage.setItem('@clinna_history', JSON.stringify(arr.slice(0, 50)));
-  } catch (e) { console.warn('Local history save failed', e); }
-}
-
-// ─── Supabase + Storage save function ────────────────────────────
-
-async function saveToArchive(
-  imageUri: string,
-  report:   ArchiveReport,
-): Promise<string> {
-  // RLS ("Users see own scans") requires user_id = auth.uid() on INSERT —
-  // set it explicitly rather than relying solely on the column DEFAULT.
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not signed in');
-
-  // 1. Insert row into scans table — get ID first
-  const { data: row, error: insertError } = await supabase
-    .from('scans')
-    .insert({
-      user_id:         user.id,
-      brand:           report.archive_id.brand           || null,
-      collection_year: report.archive_id.collection_year || null,
-      model_name:      report.archive_id.model_name      || null,
-      scan_mode:       report.scan_mode                  || 'quick_scan',
-    })
-    .select('id')
-    .single();
-
-  if (insertError || !row?.id) {
-    throw new Error(insertError?.message ?? 'DB insert failed');
-  }
-
-  const scanId: string = row.id;
-
-  // 2. Upload photo to Storage and update image_url
-  //    uploadScanImage already updates the scans table (see storageUpload.ts)
-  await uploadScanImage(imageUri, scanId, user.id);
-
-  return scanId;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -167,33 +124,6 @@ const EC = StyleSheet.create({
   valHL: { fontFamily: F.mono, fontSize: FS.md, color: C.white, fontWeight: '700' },
 });
 
-// ─── Cost breakdown bar ─────────────────────────────────────────────
-
-function CostBar({ material, labor }: { material: number; labor: number }) {
-  const total   = material + labor;
-  const matPct  = total > 0 ? material / total : 0.5;
-  const laborPct = 1 - matPct;
-  return (
-    <View style={CBV.root}>
-      <View style={CBV.track}>
-        <View style={[CBV.seg, { flex: Math.max(matPct, 0.02), backgroundColor: 'rgba(255,255,255,0.7)' }]} />
-        <View style={[CBV.seg, { flex: Math.max(laborPct, 0.02), backgroundColor: 'rgba(255,255,255,0.25)' }]} />
-      </View>
-      <View style={CBV.labelRow}>
-        <Text style={CBV.label}>MATERIAL {Math.round(matPct * 100)}%</Text>
-        <Text style={CBV.label}>LABOR {Math.round(laborPct * 100)}%</Text>
-      </View>
-    </View>
-  );
-}
-const CBV = StyleSheet.create({
-  root:     { paddingVertical: 12, gap: 8 },
-  track:    { flexDirection: 'row', height: 6, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },
-  seg:      { height: '100%' },
-  labelRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  label:    { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 1, color: C.grey400 },
-});
-
 // ─── ColorRow ─────────────────────────────────────────────────────
 
 function ColorRow({ hex, desc }: { hex: string; desc: string }) {
@@ -232,95 +162,6 @@ const MR = StyleSheet.create({
   val:  { fontFamily: F.mono, fontSize: FS.sm, color: C.white, flex: 2, textAlign: 'right', lineHeight: 19 },
 });
 
-// ─── Save To Archive Button ───────────────────────────────────────
-
-function SaveBtn({ state, onPress }: { state: SaveState; onPress: () => void }) {
-  const labels: Record<SaveState, string> = {
-    idle:   '[ SAVE TO ARCHIVE ]',
-    saving: '[ SAVING... ]',
-    saved:  '[ SAVED  ✦ ]',
-    error:  '[ RETRY SAVE ]',
-  };
-  // Drives both the border and the label, so these double as text colours —
-  // the idle/saving values were 2.2:1 and 1.6:1 against black.
-  const colors: Record<SaveState, string> = {
-    idle:   'rgba(255,255,255,0.7)',   //  9.96:1
-    saving: 'rgba(255,255,255,0.45)',  //  4.41:1 — transient, non-interactive
-    saved:  'rgba(180,210,160,0.85)',  // greenish — success
-    error:  'rgba(210,140,140,0.85)',  // reddish — error
-  };
-  return (
-    <TouchableOpacity
-      style={[SB.root, { borderColor: colors[state] }]}
-      onPress={onPress}
-      disabled={state === 'saving' || state === 'saved'}
-      activeOpacity={0.6}
-    >
-      <Text style={[SB.label, { color: colors[state] }]}>
-        {labels[state]}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-const SB = StyleSheet.create({
-  root: {
-    borderWidth:   1,
-    paddingVertical: 15,
-    alignItems:    'center',
-    backgroundColor: '#000000',   // black background
-  },
-  label: {
-    fontFamily:    'Courier New',
-    fontSize:      FS.xxs,
-    letterSpacing: 3,
-  },
-});
-
-// ─── Shareable cost card (hidden, captured as PNG) ────────────────
-// Rendered at 360x640 (9:16) and captured at exactly 3x → 1080x1920.
-
-const CARD_W = 360;
-const CARD_H = 640;
-
-const ShareCard = React.forwardRef<View, { imageUri: string; r: ArchiveReport }>(
-  ({ imageUri, r }, ref) => {
-    const f = r.financials;
-    return (
-      <View ref={ref} collapsable={false} style={SCV.root}>
-        <Image source={{ uri: imageUri }} style={SCV.image} resizeMode="cover" />
-        <View style={SCV.body}>
-          <Text style={SCV.costLine}>[ PRODUCTION COST: {formatUsd(f.total_production_cost_usd)} ]</Text>
-          {f.estimated_retail_price_usd != null && (
-            <Text style={SCV.subLine}>[ RETAIL: {formatUsd(f.estimated_retail_price_usd)} ]</Text>
-          )}
-          {f.brand_markup != null && (
-            <Text style={SCV.subLine}>[ MARKUP: {f.brand_markup.toFixed(1)}x ]</Text>
-          )}
-          <CostBar material={f.material_cost_usd} labor={f.labor_cost_usd} />
-        </View>
-        <View style={SCV.footer}>
-          <Text style={SCV.watermark}>CLINNA</Text>
-          <Text style={SCV.watermarkSub}>clinna.app</Text>
-        </View>
-      </View>
-    );
-  },
-);
-
-const SCV = StyleSheet.create({
-  root:  { width: CARD_W, height: CARD_H, backgroundColor: C.black },
-  image: { width: CARD_W, height: CARD_H * 0.5 },
-  body:  { paddingHorizontal: 20, paddingTop: 20, gap: 6 },
-  costLine: { fontFamily: F.mono, fontSize: 17, fontWeight: '700', letterSpacing: 1, color: C.white },
-  subLine:  { fontFamily: F.mono, fontSize: 13, letterSpacing: 1, color: C.grey400 },
-  footer: {
-    position: 'absolute', bottom: 20, left: 20, right: 20,
-    alignItems: 'center', gap: 2,
-  },
-  watermark:    { fontFamily: 'MissFajardose', fontSize: 30, color: '#F2F0EB' },
-  watermarkSub: { fontFamily: F.mono, fontSize: 10, letterSpacing: 3, color: C.grey600 },
-});
-
 // ═══════════════════════════════════════════════════════════════════
 // Ana Ekran
 // ═══════════════════════════════════════════════════════════════════
@@ -330,7 +171,10 @@ export default function ResultScreen() {
   const route      = useRoute<Route>();
   const insets     = useSafeAreaInsets();
   const { session } = useSession();
-  const { imageUri, result: r, sample = false, guestMode = false } = route.params;
+  const {
+    imageUri, result: r, sample = false, guestMode = false,
+    archiveKey = null, fromBuy = false,
+  } = route.params;
 
   // A sample carries no photo — the image slot becomes a placeholder.
   const hasImage = !sample && !!imageUri;
@@ -349,26 +193,35 @@ export default function ResultScreen() {
   const opacity    = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
 
-  // Save state
-  const [saveState, setSaveState] = useState<SaveState>('idle');
   const [shareState, setShareState] = useState<ShareState>('idle');
   const cardRef = useRef<View>(null);
 
-  useEffect(() => {
-    // Offline local save — every real scan, but never the sample: it isn't
-    // the user's item and has no business in their history.
-    if (!sample && !guestMode) saveLocalHistory(imageUri, r);
+  // Auto-archive — the scan is filed on open, not on a button press. Disabled
+  // (null key) for the sample, for guest scans and for anything that arrived
+  // without a key, e.g. an old route: none of those belong in the archive.
+  // Arriving from BuyResult reuses that scan's key, so FULL REPORT reads the
+  // existing row instead of writing a second one.
+  const archive = useAutoArchive(
+    sample || guestMode ? null : archiveKey,
+    { mode: fromBuy ? 'buy' : 'full', imageUri, report: r },
+  );
 
+  useEffect(() => {
     Animated.parallel([
       Animated.timing(opacity,    { toValue: 1, duration: 450, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 450, useNativeDriver: true }),
     ]).start();
+
+    // Rating prompt — a result screen is the app having just worked. Never
+    // from the sample: that is not the user's own scan.
+    if (!sample) maybeRequestReview();
   }, []);
 
   // ── Share — capture the hidden cost card and share as PNG ────────
   const handleShare = useCallback(async () => {
     if (shareState === 'preparing') return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    track('share_tapped', { mode: fromBuy ? 'buy' : 'full' });
     setShareState('preparing');
     try {
       const available = await Sharing.isAvailableAsync();
@@ -394,36 +247,7 @@ export default function ResultScreen() {
     } finally {
       setShareState('idle');
     }
-  }, [r, shareState]);
-
-  // ── Save To Archive ──────────────────────────────────────────────
-  const handleSave = useCallback(async () => {
-    if (saveState === 'saving' || saveState === 'saved') return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSaveState('saving');
-    try {
-      await saveToArchive(imageUri, r);
-      setSaveState('saved');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Short delay then navigate to History
-      setTimeout(() => {
-        navigation.navigate('History');
-      }, 800);
-
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[ResultScreen] saveToArchive error:', msg);
-      setSaveState('error');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(
-        '[ SAVE FAILED ]',
-        '[ ERROR: ARCHIVE SAVE FAILED — CHECK CONNECTION AND RETRY ]',
-        [{ text: '[ OK ]' }],
-        { userInterfaceStyle: 'dark' },
-      );
-    }
-  }, [saveState, imageUri, r, navigation]);
+  }, [r, shareState, fromBuy]);
 
   // ── Start a real analysis ────────────────────────────────────────
   // A real scan costs a credit and hits the backend, so it needs an account.
@@ -677,9 +501,14 @@ export default function ResultScreen() {
                 <Text style={S.shareBtnArrow}>↑</Text>
               </TouchableOpacity>
 
-              {/* SAVE TO ARCHIVE — brutalist outline, color by state */}
+              {/* Already filed on open — status, not a button. */}
               <View style={{ height: 8 }} />
-              <SaveBtn state={saveState} onPress={handleSave} />
+              {archive.enabled && <ArchiveStatus
+                state={archive.state}
+                removing={archive.removing}
+                onRemove={archive.remove}
+                onRetry={archive.retry}
+              />}
 
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 8 }} />
 
@@ -697,7 +526,7 @@ export default function ResultScreen() {
           Skipped in sample mode: no photo to capture, no share to offer. */}
       {!sample && (
         <View style={S.hiddenCardWrap} pointerEvents="none">
-          <ShareCard ref={cardRef} imageUri={imageUri} r={r} />
+          <CostCard ref={cardRef} imageUri={imageUri} r={r} />
         </View>
       )}
 

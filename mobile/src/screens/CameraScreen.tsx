@@ -14,12 +14,19 @@
  *   If scansLeft === 0, pressing ANALYZE navigates to Paywall.
  *   On successful scan, decrement()/useCredit() is awaited and any
  *   sync failure is surfaced to the user (not silently swallowed).
+ *
+ * v2 — BEFORE YOU BUY:
+ *   A fifth mode, 'buy'. Single photo like quick scan, same /analyze endpoint,
+ *   same entitlement gate — the difference is TagPriceStep between the photo
+ *   and the scan, and BuyResultScreen instead of ResultScreen at the end.
+ *   The mode bar is hidden in buy mode: it is entered deliberately from the
+ *   home screen's primary CTA, and BACK is how you leave it.
  */
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Image,
-  Animated, StatusBar, Dimensions, Alert,
+  View, Text, StyleSheet, TouchableOpacity, Image, TextInput,
+  Animated, StatusBar, Dimensions, Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { CameraView, CameraType, FlashMode, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -36,6 +43,8 @@ import { DeepAuthImages } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { useSession } from '../context/SessionContext';
+import { track } from '../services/analytics';
+import { noteSuccessfulScan } from '../services/review';
 
 async function playSFX(_: 'shutter' | 'tap' | 'success') { /* stub */ }
 
@@ -45,7 +54,21 @@ const VF_H = Math.round(VF_W * (4 / 3));  // portrait 3:4 — fits full-length g
 const ZOOM = 0.08;
 
 type Nav      = NativeStackNavigationProp<RootStackParamList, 'Camera'>;
-type ScanMode = 'quick_scan' | 'deep_auth' | 'acc';
+/** 'buy' rides the same quick-scan endpoint — it differs only in what it asks
+ *  for first (the tag price) and where it lands (BuyResultScreen). */
+type ScanMode = 'quick_scan' | 'deep_auth' | 'acc' | 'listing' | 'buy';
+
+/** How the archive and the analytics events name this scan. */
+function archiveModeOf(mode: ScanMode): 'buy' | 'listing' | 'full' {
+  if (mode === 'buy')     return 'buy';
+  if (mode === 'listing') return 'listing';
+  return 'full';
+}
+
+/** Identifies one scan for the whole of its life — see hooks/useAutoArchive. */
+function newArchiveKey(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 const DEEP_STEPS = [
   { label: '01 / 03', title: 'FULL GARMENT',    sub: 'Frame the complete item' },
@@ -227,6 +250,7 @@ const CB = StyleSheet.create({
 // ═══════════════════════════════════════════════════════════════════
 
 const MODES: { key: ScanMode; label: string }[] = [
+  { key: 'listing',    label: 'LISTING'   },
   { key: 'quick_scan', label: 'QUICK'     },
   { key: 'deep_auth',  label: 'DETAILED'  },
   { key: 'acc',        label: 'ACCESSORY' },
@@ -337,6 +361,129 @@ const BN = StyleSheet.create({
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// Tag Price Step — before-you-buy only
+// ═══════════════════════════════════════════════════════════════════
+//
+// Sits between the photo and the scan. The user is in a shop with a price tag
+// in their hand, so this is one screen with one field and an explicit way out:
+// SKIP runs the same scan and the report simply has no price to compare to.
+//
+// Full-screen rather than a bottom panel because the numeric keypad would
+// cover a bottom panel entirely.
+
+function TagPriceStep({
+  imageUri, value, onChange, onSubmit, onSkip, onRetake,
+}: {
+  imageUri: string;
+  value:    string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  onSkip:   () => void;
+  onRetake: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const hasPrice = parseTagPrice(value) != null;
+
+  return (
+    <KeyboardAvoidingView
+      style={TP.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={[TP.scroll, { paddingTop: insets.top + SP.lg, paddingBottom: insets.bottom + SP.lg }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={TP.topBar}>
+          <TouchableOpacity onPress={onRetake} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
+            <Text style={TP.topBtn}>RETAKE</Text>
+          </TouchableOpacity>
+          <Text style={TP.topLabel}>{strings.camera.tagPriceTitle}</Text>
+          <View style={{ width: 56 }} />
+        </View>
+
+        {!!imageUri && (
+          <View style={TP.thumbWrap}>
+            <Image source={{ uri: imageUri }} style={TP.thumb} resizeMode="cover" />
+          </View>
+        )}
+
+        <View style={TP.field}>
+          <Text style={TP.label}>{strings.camera.tagPriceLabel}</Text>
+          <View style={TP.inputRow}>
+            <Text style={TP.prefix}>$</Text>
+            <TextInput
+              style={TP.input}
+              value={value}
+              onChangeText={onChange}
+              placeholder={strings.camera.tagPricePlaceholder}
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              keyboardType="decimal-pad"
+              autoFocus
+              maxLength={9}
+            />
+          </View>
+          <View style={TP.underline} />
+          <Text style={TP.note}>{strings.camera.tagPriceNote}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[TP.primaryBtn, !hasPrice && TP.primaryBtnDim]}
+          onPress={onSubmit}
+          disabled={!hasPrice}
+          activeOpacity={0.85}
+        >
+          <Text style={[TP.primaryTxt, !hasPrice && TP.primaryTxtDim]}>
+            {strings.camera.tagPriceContinue}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={TP.skipBtn} onPress={onSkip} activeOpacity={0.6}>
+          <Text style={TP.skipTxt}>{strings.camera.tagPriceSkip}</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+/** Digits and one decimal point → a positive number, or null. */
+function parseTagPrice(raw: string): number | null {
+  const cleaned = raw.replace(/[^0-9.]/g, '');
+  if (!cleaned) return null;
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+const TP = StyleSheet.create({
+  root:   { ...StyleSheet.absoluteFillObject, backgroundColor: C.black, zIndex: 50 },
+  scroll: { paddingHorizontal: SP.lg, gap: SP.lg },
+
+  topBar:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: SP.sm },
+  topBtn:   { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2.5, color: C.grey400 },
+  topLabel: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 4, color: C.white },
+
+  thumbWrap: { alignSelf: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', overflow: 'hidden' },
+  thumb:     { width: 96, height: 96 },
+
+  // Same field shape as AuthScreen: label, baseline input, hairline underline.
+  field:     { gap: 8 },
+  label:     { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 2, color: C.grey400 },
+  inputRow:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  prefix:    { fontFamily: F.mono, fontSize: FS.xl, color: C.white },
+  input:     { flex: 1, fontFamily: F.mono, fontSize: FS.xl, color: C.white, paddingVertical: 10 },
+  underline: { height: 1, backgroundColor: 'rgba(255,255,255,0.25)' },
+  note:      { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 0.3, color: C.grey400, lineHeight: 16 },
+
+  primaryBtn:    { backgroundColor: C.white, paddingVertical: 17, paddingHorizontal: SP.lg, alignItems: 'center' },
+  primaryBtnDim: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  primaryTxt:    { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, fontWeight: '700', color: C.black },
+  primaryTxtDim: { color: C.grey400 },
+
+  skipBtn: { alignItems: 'center', paddingVertical: SP.sm },
+  skipTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey400 },
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // Permission Screen
 // ═══════════════════════════════════════════════════════════════════
 
@@ -366,7 +513,7 @@ function PermScreen({ onRequest }: { onRequest: () => void }) {
 export default function CameraScreen() {
   const navigation = useNavigation<Nav>();
   const route      = useRoute<RouteProp<RootStackParamList, 'Camera'>>();
-  const { guestMode = false } = route.params ?? {};
+  const { guestMode = false, listingMode = false, buyMode = false } = route.params ?? {};
   const { session } = useSession();
   const insets     = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
@@ -378,9 +525,18 @@ export default function CameraScreen() {
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
 
   // Mode state
-  const [mode,     setMode]     = useState<ScanMode>('quick_scan');
+  const [mode,     setMode]     = useState<ScanMode>(
+    buyMode ? 'buy' : listingMode ? 'listing' : 'quick_scan',
+  );
   const [deepStep, setDeepStep] = useState(0);
   const [deepUris, setDeepUris] = useState<(string | null)[]>([null, null, null]);
+
+  // Before-you-buy: the tag price step stands between the photo and the scan.
+  // `tagEntered` flips once the user has answered it either way, which both
+  // dismisses the step and lets the normal error/retry bar take over.
+  const [tagPriceRaw, setTagPriceRaw] = useState('');
+  const [tagPrice,    setTagPrice]    = useState<number | null>(null);
+  const [tagEntered,  setTagEntered]  = useState(false);
 
   // FIX 1: deepActionShown — action bar does not open without calling showActionBar()
   const [deepActionShown, setDeepActionShown] = useState(false);
@@ -390,7 +546,7 @@ export default function CameraScreen() {
   const actionSlide  = useRef(new Animated.Value(56)).current;
   const actionFade   = useRef(new Animated.Value(0)).current;
 
-  const { state, runQuickScan, runGuestQuickScan, runDeepAuth, runAccScan, reset } = useAnalysis();
+  const { state, runQuickScan, runGuestQuickScan, runDeepAuth, runAccScan, runListingScan, reset } = useAnalysis();
 
   // Entitlement state
   const { scansLeft, credits, isProActive, decrement, useCredit } = useScansLeft();
@@ -400,24 +556,49 @@ export default function CameraScreen() {
 
   // ── Navigate on success + deduct correct entitlement ─────────
   useEffect(() => {
-    if (state.status === 'success') {
+    if (state.status === 'success' || state.status === 'listingSuccess') {
       hap.success(); playSFX('success');
       const method = entitlementMethodRef.current;
       entitlementMethodRef.current = null;
 
-      const preview = mode === 'quick_scan' ? capturedUri : deepUris[0];
+      const preview   = (mode === 'deep_auth' || mode === 'acc') ? deepUris[0] : capturedUri;
+      const isBuy     = mode === 'buy';
+      const scanPrice = isBuy ? tagPrice : null;
+
+      track('scan_succeeded', { mode: archiveModeOf(mode), has_tag_price: scanPrice != null });
+      noteSuccessfulScan();
+
+      // One key per scan — the result screens archive against it exactly once,
+      // however many times they mount (BuyResult → FULL REPORT included).
+      const archiveKey = newArchiveKey();
 
       // Guest mode — mark the free scan as used and navigate without saving
       if (guestMode) {
         AsyncStorage.setItem('@clinna_guest_scan_used', 'true').catch(() => {});
-        navigation.replace('Result', { imageUri: preview!, result: state.data, guestMode: true });
+        if (state.status === 'success') {
+          if (isBuy) {
+            navigation.replace('BuyResult', {
+              imageUri: preview!, result: state.data, tagPrice: scanPrice, guestMode: true,
+            });
+          } else {
+            navigation.replace('Result', { imageUri: preview!, result: state.data, guestMode: true });
+          }
+        }
         reset();
         return;
       }
 
       // Navigate immediately — the report is ready, don't make the user
       // wait on the entitlement sync round-trip to see it.
-      navigation.replace('Result', { imageUri: preview!, result: state.data });
+      if (state.status === 'listingSuccess') {
+        navigation.replace('ListingResult', { imageUri: preview!, listing: state.listing, archiveKey });
+      } else if (isBuy) {
+        navigation.replace('BuyResult', {
+          imageUri: preview!, result: state.data, tagPrice: scanPrice, archiveKey,
+        });
+      } else {
+        navigation.replace('Result', { imageUri: preview!, result: state.data, archiveKey });
+      }
       reset();
 
       // Deduct the currency that was chosen when scan started. null means
@@ -441,6 +622,11 @@ export default function CameraScreen() {
     }
   }, [state.status]);
 
+  // ── Failed scans — the banner already tells the user; this tells us ──
+  useEffect(() => {
+    if (state.status === 'error') track('scan_failed', { mode: archiveModeOf(mode) });
+  }, [state.status]);
+
   // ── Reset on mode change ─────────────────────────────────────
   const handleModeChange = useCallback((m: ScanMode) => {
     setMode(m);
@@ -448,6 +634,7 @@ export default function CameraScreen() {
     setDeepStep(0);
     setDeepUris([null, null, null]);
     setDeepActionShown(false); // FIX 1: reset
+    setTagPriceRaw(''); setTagPrice(null); setTagEntered(false);
     reset();
     actionSlide.setValue(56);
     actionFade.setValue(0);
@@ -465,8 +652,9 @@ export default function CameraScreen() {
   // ── Retake ────────────────────────────────────────────────────
   const handleRetake = useCallback(() => {
     hap.tap(); playSFX('tap');
-    if (mode === 'quick_scan') {
+    if (mode === 'quick_scan' || mode === 'buy') {
       setCapturedUri(null);
+      setTagEntered(false);
     } else {
       setDeepUris(prev => { const n = [...prev]; n[deepStep] = null; return n; });
       setCapturedUri(null);
@@ -501,7 +689,7 @@ export default function CameraScreen() {
         return;
       }
       console.log('[CLINNA] Gallery URI selected:', uri.slice(-50));
-      if (mode === 'quick_scan') {
+      if (mode === 'quick_scan' || mode === 'buy') {
         setCapturedUri(uri); showActionBar();
       } else {
         const updated = [...deepUris]; updated[deepStep] = uri; setDeepUris(updated);
@@ -529,7 +717,7 @@ export default function CameraScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       if (!photo?.uri) return;
-      if (mode === 'quick_scan') {
+      if (mode === 'quick_scan' || mode === 'buy') {
         setCapturedUri(photo.uri); showActionBar();
       } else {
         const updated = [...deepUris]; updated[deepStep] = photo.uri; setDeepUris(updated);
@@ -550,10 +738,13 @@ export default function CameraScreen() {
   const handleAnalyze = useCallback(() => {
     hap.tap(); playSFX('tap');
 
-    // Guest mode — skip entitlement gate, only allow quick_scan
+    // Guest mode — skip entitlement gate, single-photo modes only. Buy is one
+    // of them: it is the home screen's primary CTA, so the free first scan has
+    // to reach it (Apple 5.1.1(v)).
     if (guestMode) {
-      if (mode !== 'quick_scan' || !capturedUri) return;
+      if ((mode !== 'quick_scan' && mode !== 'buy') || !capturedUri) return;
       entitlementMethodRef.current = null;
+      track('scan_started', { mode: archiveModeOf(mode) });
       runGuestQuickScan(capturedUri);
       return;
     }
@@ -574,9 +765,16 @@ export default function CameraScreen() {
       entitlementMethodRef.current = 'useCredit';
     }
 
-    if (mode === 'quick_scan') {
+    track('scan_started', { mode: archiveModeOf(mode) });
+
+    // Buy rides the same quick-scan endpoint — there is no separate backend
+    // route; the tag price is a client-side comparison only.
+    if (mode === 'quick_scan' || mode === 'buy') {
       if (!capturedUri) return;
       runQuickScan(capturedUri);
+    } else if (mode === 'listing') {
+      if (!capturedUri) return;
+      runListingScan(capturedUri);
     } else if (mode === 'acc') {
       const [product, label, tag] = deepUris;
       if (!product) return;
@@ -588,7 +786,34 @@ export default function CameraScreen() {
       const imgs: DeepAuthImages = { product, ...(label ? { label } : {}), ...(tag ? { tag } : {}) };
       runDeepAuth(imgs);
     }
-  }, [mode, capturedUri, deepUris, runQuickScan, runGuestQuickScan, runDeepAuth, runAccScan, scansLeft, credits, isProActive, guestMode]);
+  }, [mode, capturedUri, deepUris, runQuickScan, runGuestQuickScan, runDeepAuth, runAccScan, runListingScan, scansLeft, credits, isProActive, guestMode]);
+
+  // ── Tag price step — before-you-buy only ──────────────────────
+  // Both paths run the identical scan; the only difference is whether a price
+  // rides along to compare the production cost against.
+  const handleTagSubmit = useCallback(() => {
+    const parsed = parseTagPrice(tagPriceRaw);
+    if (parsed == null) return;
+    hap.tap();
+    track('tag_price_entered');
+    setTagPrice(parsed);
+    setTagEntered(true);
+  }, [tagPriceRaw]);
+
+  const handleTagSkip = useCallback(() => {
+    hap.tap();
+    track('tag_price_skipped');
+    setTagPrice(null);
+    setTagEntered(true);
+  }, []);
+
+  // Kick the scan off once the step has been answered — done here rather than
+  // inside the handlers so handleAnalyze sees the committed tagPrice state.
+  useEffect(() => {
+    if (mode === 'buy' && tagEntered && capturedUri && state.status === 'idle') {
+      handleAnalyze();
+    }
+  }, [tagEntered]);
 
   // ── Skip 3rd step ─────────────────────────────────────────────
   const handleSkip3 = useCallback(() => {
@@ -598,16 +823,20 @@ export default function CameraScreen() {
 
   // ── Derived state ─────────────────────────────────────────────
 
-  const isMultiMode = mode !== 'quick_scan';
+  const isSinglePhoto = mode === 'quick_scan' || mode === 'buy';
+  const isMultiMode = !isSinglePhoto;
   const steps       = mode === 'acc' ? ACC_STEPS : DEEP_STEPS;
   const stepInfo    = steps[deepStep];
-  const isPreview   = !!capturedUri && (mode === 'quick_scan' || deepStep === 2);
+  const isPreview   = !!capturedUri && (isSinglePhoto || deepStep === 2);
   const isLoading   = state.status === 'loading';
   const isQuota     = state.status === 'quota';
   const isError     = state.status === 'error';
 
   const deepReady  = isMultiMode && deepActionShown && !!deepUris[0];
-  const showAction = (mode === 'quick_scan' && !!capturedUri) || deepReady;
+  const showAction = (isSinglePhoto && !!capturedUri) || deepReady;
+
+  // The tag price step owns the screen between the photo and the scan.
+  const showTagStep = mode === 'buy' && !!capturedUri && !tagEntered;
 
   if (!permission)         return <View style={{ flex: 1, backgroundColor: C.black }} />;
   if (!permission.granted) return <PermScreen onRequest={requestPermission} />;
@@ -641,7 +870,7 @@ export default function CameraScreen() {
         <CornerBrackets active={!capturedUri} />
 
         {/* Pre-capture framing hint — quick scan only; multi-step has per-step sub-labels */}
-        {!capturedUri && mode === 'quick_scan' && (
+        {!capturedUri && isSinglePhoto && (
           <View style={S.captureHint} pointerEvents="none">
             <Text style={S.captureHintTxt}>{strings.camera.hintBeforeCapture}</Text>
           </View>
@@ -653,7 +882,12 @@ export default function CameraScreen() {
             <Text style={S.topBtn}>BACK</Text>
           </TouchableOpacity>
           <Text style={S.topLabel}>
-            {isMultiMode && !isPreview ? stepInfo.title : mode === 'quick_scan' ? 'QUICK' : mode === 'acc' ? 'ACCESSORY' : 'DETAILED'}
+            {isMultiMode && !isPreview
+              ? stepInfo.title
+              : mode === 'buy'        ? strings.camera.buyModeLabel
+              : mode === 'quick_scan' ? 'QUICK'
+              : mode === 'acc'        ? 'ACCESSORY'
+              : 'DETAILED'}
           </Text>
           {!capturedUri ? (
             <TouchableOpacity onPress={toggleFacing} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
@@ -702,7 +936,7 @@ export default function CameraScreen() {
       {/* ════════════ BOTTOM PANEL ══════════════════════════════ */}
       <View style={[S.bottom, { paddingBottom: insets.bottom + 12 }]}>
 
-        {!capturedUri && deepStep === 0 && !guestMode && (
+        {!capturedUri && deepStep === 0 && !guestMode && mode !== 'buy' && (
           <View style={S.modeBarWrap}>
             <ModeBar mode={mode} onChange={handleModeChange} />
           </View>
@@ -724,7 +958,7 @@ export default function CameraScreen() {
         {/* Analyze action bar */}
         {showAction && (
           <Animated.View style={{ transform: [{ translateY: actionSlide }], opacity: actionFade }}>
-            {mode === 'quick_scan' ? (
+            {isSinglePhoto ? (
               <>
                 <Text style={S.readyLabel}>READY TO ANALYZE</Text>
                 <Text style={S.readyHint}>{strings.camera.hintAfterCapture}</Text>
@@ -748,6 +982,18 @@ export default function CameraScreen() {
           </Animated.View>
         )}
       </View>
+
+      {/* ════════════ TAG PRICE STEP (buy mode) ═════════════════ */}
+      {showTagStep && (
+        <TagPriceStep
+          imageUri={capturedUri!}
+          value={tagPriceRaw}
+          onChange={setTagPriceRaw}
+          onSubmit={handleTagSubmit}
+          onSkip={handleTagSkip}
+          onRetake={handleRetake}
+        />
+      )}
 
       {/* ════════════ ANALYZING OVERLAY ═════════════════════════ */}
       <AnalyzingOverlay visible={isLoading} />

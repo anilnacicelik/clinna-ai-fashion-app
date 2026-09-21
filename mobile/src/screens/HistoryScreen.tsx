@@ -19,6 +19,8 @@ import * as Haptics from 'expo-haptics';
 import { supabase } from '../services/supabase';
 import { useScansLeft } from '../hooks/useScansLeft';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { strings } from '../i18n/strings';
+import { formatUsd } from '../utils/cost';
 import { C, F, FS, SP } from '../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'History'>;
@@ -35,6 +37,30 @@ interface ScanRecord {
   resell_value:    string | null;
   scan_mode:       string | null;
   image_url:       string | null;
+  // v2 columns — absent on rows written before supabase/v2_events_feedback.sql
+  // was run, and absent from the whole table until it is.
+  mode?:           string | null;
+  tag_price?:      number | null;
+  markup_pct?:     number | null;
+}
+
+// ─── Mode label ──────────────────────────────────────────────────
+
+/**
+ * BUY / FULL / LISTING. Rows older than v2 carry no `mode`: a listing scan is
+ * still identifiable by its scan_mode, and everything else was a full
+ * analysis. Never throws on a missing or unexpected value.
+ */
+function modeLabelOf(item: ScanRecord): string {
+  switch ((item.mode ?? '').toLowerCase()) {
+    case 'buy':     return strings.archive.modeBuy;
+    case 'listing': return strings.archive.modeListing;
+    case 'full':    return strings.archive.modeFull;
+    default:
+      return item.scan_mode === 'listing'
+        ? strings.archive.modeListing
+        : strings.archive.modeFull;
+  }
 }
 
 // ─── Date format ─────────────────────────────────────────────────
@@ -48,6 +74,11 @@ function formatDate(iso: string): string {
 // ─── Single scan row ─────────────────────────────────────────────
 
 function ScanRow({ item, onLongPress }: { item: ScanRecord; onLongPress: () => void }) {
+  const buyDetail = [
+    item.tag_price  != null ? strings.archive.tagPriceMeta(formatUsd(item.tag_price)) : null,
+    item.markup_pct != null ? strings.archive.markupMeta(item.markup_pct)             : null,
+  ].filter(Boolean).join('  ·  ');
+
   return (
     <TouchableOpacity
       onLongPress={onLongPress}
@@ -80,10 +111,13 @@ function ScanRow({ item, onLongPress }: { item: ScanRecord; onLongPress: () => v
           {item.resell_value && (
             <Text style={ROW.resell}>{item.resell_value}</Text>
           )}
-          <Text style={ROW.meta}>
-            {formatDate(item.created_at)}
-            {item.scan_mode ? `  ·  ${item.scan_mode.replace('_', ' ').toUpperCase()}` : ''}
-          </Text>
+          {/* Buy scans carry the price that was on the tag and what share of
+              it the estimate put down to markup. */}
+          {!!buyDetail && <Text style={ROW.resell}>{buyDetail}</Text>}
+          <View style={ROW.metaRow}>
+            <Text style={ROW.modeTag}>{modeLabelOf(item)}</Text>
+            <Text style={ROW.meta}>{formatDate(item.created_at)}</Text>
+          </View>
         </View>
 
       </View>
@@ -140,12 +174,25 @@ const ROW = StyleSheet.create({
     color:         'rgba(255,255,255,0.65)',   // 8.6:1
     letterSpacing: 0.5,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           SP.sm,
+    marginTop:     2,
+  },
+  // Mode tag — same mono/tracking language as every other label in the app,
+  // sized to sit quietly next to the date rather than compete with the brand.
+  modeTag: {
+    fontFamily:    F.mono,
+    fontSize:      FS.xxs,
+    color:         C.grey400,
+    letterSpacing: 2,
+  },
   meta: {
     fontFamily:    F.mono,
     fontSize:      FS.xxs,       // was 8
     color:         C.grey600,
     letterSpacing: 0.5,
-    marginTop:     2,
   },
 });
 
@@ -178,6 +225,9 @@ const EMPTY = StyleSheet.create({
 // Main Screen
 // ═══════════════════════════════════════════════════════════════════
 
+const V1_COLUMNS = 'id, created_at, brand, collection_year, model_name, legit_score, resell_value, scan_mode, image_url';
+const V2_COLUMNS = `${V1_COLUMNS}, mode, tag_price, markup_pct`;
+
 export default function HistoryScreen() {
   const navigation = useNavigation<Nav>();
   const insets     = useSafeAreaInsets();
@@ -199,14 +249,23 @@ export default function HistoryScreen() {
     setError(null);
 
     try {
-      const { data, error: dbError } = await supabase
+      const fetchColumns = (columns: string) => supabase
         .from('scans')
-        .select('id, created_at, brand, collection_year, model_name, legit_score, resell_value, scan_mode, image_url')
+        .select(columns)
         .order('created_at', { ascending: false })
         .limit(100);
 
-      if (dbError) throw dbError;
-      setScans((data as ScanRecord[]) ?? []);
+      // Ask for the v2 columns; if the migration has not been run the whole
+      // select 400s, so fall back to the pre-v2 column list rather than
+      // showing the user an empty archive.
+      let res: { data: unknown; error: { message: string } | null } = await fetchColumns(V2_COLUMNS);
+      if (res.error) {
+        console.warn('[HistoryScreen] v2 columns unavailable, falling back:', res.error.message);
+        res = await fetchColumns(V1_COLUMNS);
+      }
+
+      if (res.error) throw res.error;
+      setScans((res.data as ScanRecord[]) ?? []);
     } catch (e: any) {
       console.error('[HistoryScreen] fetchScans:', e);
       setError('ARCHIVE COULD NOT BE LOADED.');

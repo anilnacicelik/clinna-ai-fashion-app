@@ -59,3 +59,23 @@ class ArchiveReport(BaseModel):
     processing_ms:   int         = 0
     scan_mode:       str         = "quick_scan"
     image_count:     int         = 1
+
+
+# ── Vinted Listing response ───────────────────────────────────────
+
+class VintedListing(BaseModel):
+    """Marketplace-ready listing draft generated from a garment photo."""
+    title:               str        = ""
+    description:         str        = ""
+    brand:               str        = "Unbranded"
+    size:                str        = "Not specified"
+    condition:           str        = "Good"
+    condition_notes:     str        = ""
+    category:            str        = ""
+    colors:              list[str]  = Field(default_factory=list)
+    suggested_price_eur: float      = 0
+    price_reasoning:     str        = ""
+    hashtags:            list[str]  = Field(default_factory=list)
+    material:            str        = ""
+    is_fashion_item:     bool       = True
+    processing_ms:       int        = 0

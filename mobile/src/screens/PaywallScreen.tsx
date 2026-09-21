@@ -4,7 +4,7 @@
  * RevenueCat handles the actual purchase; Supabase synced after success.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, StatusBar,
@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { usePurchases } from '../hooks/usePurchases';
 import { useScansLeft } from '../hooks/useScansLeft';
+import { track } from '../services/analytics';
 import { C, F, FS, SP } from '../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Paywall'>;
@@ -81,6 +82,8 @@ export default function PaywallScreen() {
   const [activeTab,   setActiveTab]   = useState<Tab>('credits');
   const [selectedId,  setSelectedId]  = useState<string | null>(null);
 
+  useEffect(() => { track('paywall_viewed'); }, []);
+
   const products       = activeTab === 'credits' ? CREDIT_PRODUCTS : PRO_PRODUCTS;
   const selectedProduct = products.find(p => p.id === selectedId);
 
@@ -109,8 +112,10 @@ export default function PaywallScreen() {
   const handlePurchase = async () => {
     if (!selectedId || loading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    track('purchase_started', { product_id: selectedId });
     const ok = await purchase(selectedId);
     if (ok) {
+      track('purchase_succeeded', { product_id: selectedId });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       pollEntitlement();
       navigation.goBack();

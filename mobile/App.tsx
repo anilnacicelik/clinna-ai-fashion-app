@@ -10,9 +10,14 @@ import { View } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import AppNavigator from './src/navigation/AppNavigator';
+import { track } from './src/services/analytics';
 
 // Splash screen'i font yüklenene kadar tut
 SplashScreen.preventAutoHideAsync();
+
+// Fired once per cold start, at module scope so it runs before the first
+// render and is not repeated by a re-render of App.
+track('app_open');
 
 export default function App() {
   // ── Font yükle ────────────────────────────────────────────────

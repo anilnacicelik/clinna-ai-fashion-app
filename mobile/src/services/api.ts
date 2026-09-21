@@ -64,11 +64,30 @@ export interface ArchiveReport {
   scan_mode:       'quick_scan' | 'deep_auth' | 'acc';
   image_count:     number;
 }
-export type ScanMode = 'quick_scan' | 'deep_auth' | 'acc';
+export type ScanMode = 'quick_scan' | 'deep_auth' | 'acc' | 'listing';
 export interface DeepAuthImages {
   product: string;
   label?:  string;
   tag?:    string;
+}
+
+// ── Vinted Listing types ─────────────────────────────────────────
+
+export interface VintedListing {
+  title:               string;
+  description:         string;
+  brand:               string;
+  size:                string;
+  condition:           string;
+  condition_notes:     string;
+  category:            string;
+  colors:              string[];
+  suggested_price_eur: number;
+  price_reasoning:     string;
+  hashtags:            string[];
+  material:            string;
+  is_fashion_item:     boolean;
+  processing_ms:       number;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -315,6 +334,48 @@ export async function deepAuth(imgs: DeepAuthImages, scanMode: 'deep_auth' | 'ac
 
   const res = await xhrPost(`${BASE_URL}/analyze/deep`, body, TIMEOUT_DEEP_MS, await authHeaders());
   return handleResponse(res);
+}
+
+/** Vinted Listing — single image, generates marketplace-ready listing draft */
+export async function listingScan(imageUri: string): Promise<VintedListing> {
+  console.log('[CLINNA API] listingScan start');
+  const body = new FormData();
+  body.append('image', uriToFormPart(imageUri) as any);
+
+  const res = await xhrPost(`${BASE_URL}/analyze/listing`, body, TIMEOUT_QUICK_MS, await authHeaders());
+  return handleListingResponse(res);
+}
+
+/** Response handler for VintedListing */
+async function handleListingResponse(res: Response): Promise<VintedListing> {
+  if (res.status === 429) {
+    const after = parseInt(res.headers.get('Retry-After') ?? '30', 10);
+    console.warn(`[CLINNA API] 429 Quota — retry after ${after}s`);
+    throw new ApiError(429, strings.common.errors.systemBusy(after), true, after, 'Gemini rate limit');
+  }
+
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const j = await res.json();
+      if (j?.detail) detail = String(j.detail);
+      console.error(`[CLINNA API] HTTP ${res.status} body:`, j);
+    } catch {
+      console.error(`[CLINNA API] HTTP ${res.status} — could not parse body`);
+    }
+    const isServerError = res.status >= 500;
+    const message = isServerError ? strings.common.errors.serverError : detail;
+    throw new ApiError(res.status, message, isServerError);
+  }
+
+  try {
+    const data = await res.json();
+    console.log('[CLINNA API] Response OK — parsed VintedListing');
+    return data as VintedListing;
+  } catch (e) {
+    console.error('[CLINNA API] JSON parse failed:', e);
+    throw new ApiError(0, strings.common.errors.invalidResponse, false);
+  }
 }
 
 /** Permanently deletes the signed-in user's account and all associated data. */

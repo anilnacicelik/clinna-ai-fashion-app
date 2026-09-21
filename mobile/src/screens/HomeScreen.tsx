@@ -2,6 +2,13 @@
  * CLINNA — HomeScreen.tsx
  * Public root — renders fully without a session.
  *
+ * v2 — "Before you buy it, scan it."
+ *   SCAN BEFORE YOU BUY is the primary CTA and the largest thing on the
+ *   screen. FULL ANALYSIS and VINTED LISTING drop to a small secondary row
+ *   beneath it — same destinations, same gating, less weight. Everything App
+ *   Review looks for (sample report, scan counter, delete account, legal
+ *   links) stays exactly where it was.
+ *
  *  - Wordmark fontSize 112, letterSpacing 2
  *  - Top right: [ 3 SCANS LEFT ] counter (1px white border) + [ LOGOUT ] button
  *  - Logout → supabase.auth.signOut()  (Auth Guard handles redirect)
@@ -30,6 +37,7 @@ import { strings } from '../i18n/strings';
 import { PRIVACY_URL, TERMS_URL } from '../config/legal';
 import { SAMPLE_REPORT } from '../data/sampleReport';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { track } from '../services/analytics';
 
 const { width, height } = Dimensions.get('window');
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -79,30 +87,52 @@ export default function HomeScreen() {
     else navigation.navigate('Auth', { redirectTo: dest });
   };
 
-  const handleAnalyze = async () => {
+  // Shared by both scan entry points: signed in goes straight to the camera,
+  // signed out gets the one free guest scan (Apple 5.1.1(v)) and is sent to
+  // Auth once it has been used. `extra` decides which mode the camera opens in.
+  const openCamera = async (extra: { listingMode?: boolean; buyMode?: boolean } = {}) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (session) {
-      navigation.navigate('Camera');
-    } else {
-      // Apple 5.1.1(v): Allow guest users 1 free scan without login
-      try {
-        const used = await AsyncStorage.getItem('@clinna_guest_scan_used');
-        if (used === 'true') {
-          navigation.navigate('Auth', { redirectTo: 'Camera' });
-        } else {
-          navigation.navigate('Camera', { guestMode: true });
-        }
-      } catch {
-        navigation.navigate('Camera', { guestMode: true });
+      navigation.navigate('Camera', extra);
+      return;
+    }
+    try {
+      const used = await AsyncStorage.getItem('@clinna_guest_scan_used');
+      if (used === 'true') {
+        navigation.navigate('Auth', { redirectTo: 'Camera' });
+      } else {
+        navigation.navigate('Camera', { ...extra, guestMode: true });
       }
+    } catch {
+      navigation.navigate('Camera', { ...extra, guestMode: true });
     }
   };
+
+  // Primary CTA — the in-store scan.
+  const handleBuyScan = () => openCamera({ buyMode: true });
+
+  const handleAnalyze = () => openCamera();
 
   // Sample report — no session, no backend call, no scan spent. This is the
   // "see what the app does before signing up" path; ANALYZE stays gated.
   const handleSample = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    track('sample_report_viewed');
     navigation.navigate('Result', { imageUri: '', result: SAMPLE_REPORT, sample: true });
+  };
+
+  const handleVintedListing = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (session) {
+      navigation.navigate('Camera', { listingMode: true });
+    } else {
+      navigation.navigate('Auth', { redirectTo: 'Camera' });
+    }
+  };
+
+  const handleFeedback = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('Feedback');
   };
 
   const handleGetCredits = () => {
@@ -209,7 +239,7 @@ export default function HomeScreen() {
         <Text style={S.subtitle}>{strings.home.subtitle}</Text>
       </Animated.View>
 
-      {/* ── Button group: History on top, Analyze below ── */}
+      {/* ── Button group: history, primary buy CTA, secondary modes ── */}
       <Animated.View style={[S.buttonContainer, { opacity: buttonOpacity }]}>
 
         <TouchableOpacity style={S.historyButton} onPress={handleHistory} activeOpacity={0.55}>
@@ -218,9 +248,29 @@ export default function HomeScreen() {
 
         <View style={S.buttonGap} />
 
-        <TouchableOpacity style={S.button} onPress={handleAnalyze} activeOpacity={0.55}>
-          <Text style={S.buttonText}>{strings.home.analyzeBtn}</Text>
+        {/* Primary — the one the user came for. */}
+        <TouchableOpacity style={S.buyButton} onPress={handleBuyScan} activeOpacity={0.55}>
+          <Text style={S.buyText}>{strings.home.buyBtn}</Text>
         </TouchableOpacity>
+
+        {/* Secondary — the long-form modes, same destinations and gating. */}
+        <View style={S.secondaryRow}>
+          <TouchableOpacity
+            onPress={handleAnalyze}
+            activeOpacity={0.55}
+            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+          >
+            <Text style={S.secondaryText}>{strings.home.fullAnalysisBtn}</Text>
+          </TouchableOpacity>
+          <Text style={S.secondaryDot}>·</Text>
+          <TouchableOpacity
+            onPress={handleVintedListing}
+            activeOpacity={0.55}
+            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+          >
+            <Text style={S.secondaryText}>{strings.home.listingBtn}</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Sits under the primary CTA and reads as the lighter option: no
             border, no account, no scan — just the example report. */}
@@ -254,6 +304,15 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </>
         )}
+
+        <TouchableOpacity
+          style={S.feedbackBtn}
+          onPress={handleFeedback}
+          activeOpacity={0.55}
+          hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+        >
+          <Text style={S.feedbackText}>{strings.home.feedbackBtn}</Text>
+        </TouchableOpacity>
 
         <View style={S.legalRow}>
           <TouchableOpacity onPress={handlePrivacyPolicy} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
@@ -363,12 +422,14 @@ const S = StyleSheet.create({
     top:        height * 0.30 + 158 + 26, // +26 to clear the new CLINNA brand label line above
     alignItems: 'center',
   },
+  // Positioning line. Sentence case now, so the tracking comes back down —
+  // 2.5 was tuned for the all-caps 'ARCHIVE · ANALYZE · VALUE' it replaced.
   subtitle: {
     fontFamily:    'System',
-    fontSize:      11,                          // was 9
+    fontSize:      12,
     fontWeight:    '400',
-    letterSpacing: 2.5,                         // was 3.5 — wide tracking at this size reads as noise
-    color:         'rgba(242, 240, 235, 0.55)', // 5.62:1 (was 0.22 → 1.71:1)
+    letterSpacing: 1.2,
+    color:         'rgba(242, 240, 235, 0.55)', // 5.62:1
   },
 
   // ── Button group ─────────────────────────────────────────────────
@@ -395,19 +456,38 @@ const S = StyleSheet.create({
     color:         'rgba(255,255,255,0.62)',     // 7.85:1 (was 0.35 → 3.01:1, below AA)
   },
   buttonGap: { height: 10 },
-  button: {
+  // Primary CTA — solid white, and the tallest, largest-type control on the
+  // screen. Same shape as the VINTED LISTING button it replaces, scaled up.
+  buyButton: {
     width:           '100%',
-    borderWidth:     1,                          // was 0.5 — sub-pixel border rendered as a smear
-    borderColor:     'rgba(242, 240, 235, 0.45)',
-    paddingVertical: 18,
+    backgroundColor: C.white,
+    paddingVertical: 22,
     alignItems:      'center',
   },
-  buttonText: {
-    fontFamily:    'System',
-    fontSize:      12,                           // was 10 — this is the primary CTA
-    fontWeight:    '500',
-    letterSpacing: 3.5,                          // was 5
-    color:         'rgba(242, 240, 235, 0.92)',  // 15.4:1 (was 0.6 → 6.58:1)
+  buyText: {
+    fontFamily:    F.sans,
+    fontSize:      FS.sm,                        // 14 — largest button label here
+    fontWeight:    '700',
+    letterSpacing: 3,
+    color:         C.black,
+  },
+  // Secondary row — text only, so neither mode competes with the primary CTA.
+  secondaryRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           SP.sm,
+    marginTop:     14,
+  },
+  secondaryText: {
+    fontFamily:    F.mono,
+    fontSize:      FS.xxs,
+    letterSpacing: 2,
+    color:         C.grey400,                    // 8.27:1
+  },
+  secondaryDot: {
+    fontFamily: F.mono,
+    fontSize:   FS.xxs,
+    color:      C.grey600,
   },
   // Tertiary CTA — text-only so it never competes with ANALYZE, but at the
   // same contrast as the legal links so it stays legible.
@@ -430,6 +510,16 @@ const S = StyleSheet.create({
     fontSize:      FS.xxs,
     letterSpacing: 1.5,
     color:         C.grey600,                    // 5.56:1 (was rgba 0.22 → 1.71:1)
+  },
+  feedbackBtn: {
+    marginTop:  16,
+    alignItems: 'center',
+  },
+  feedbackText: {
+    fontFamily:    F.mono,
+    fontSize:      FS.xxs,
+    letterSpacing: 1.5,
+    color:         C.grey600,                    // 5.56:1
   },
   legalRow: {
     flexDirection: 'row',
