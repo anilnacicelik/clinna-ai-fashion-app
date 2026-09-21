@@ -65,6 +65,19 @@ function archiveModeOf(mode: ScanMode): 'buy' | 'listing' | 'full' {
   return 'full';
 }
 
+/**
+ * Modes that take exactly one photo.
+ *
+ * Listing belongs here: POST /analyze/listing declares a single `image` field
+ * (backend/routers/analyze.py), and services/api.ts sends one. It used to run
+ * through the three-step deep flow, which cleared capturedUri 600ms after the
+ * first shot — ANALYZE then did nothing until a third photo had been taken,
+ * and only that third photo was ever uploaded.
+ */
+function isSinglePhotoMode(m: ScanMode): boolean {
+  return m === 'quick_scan' || m === 'buy' || m === 'listing';
+}
+
 /** Identifies one scan for the whole of its life — see hooks/useAutoArchive. */
 function newArchiveKey(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -652,7 +665,7 @@ export default function CameraScreen() {
   // ── Retake ────────────────────────────────────────────────────
   const handleRetake = useCallback(() => {
     hap.tap(); playSFX('tap');
-    if (mode === 'quick_scan' || mode === 'buy') {
+    if (isSinglePhotoMode(mode)) {
       setCapturedUri(null);
       setTagEntered(false);
     } else {
@@ -689,7 +702,7 @@ export default function CameraScreen() {
         return;
       }
       console.log('[CLINNA] Gallery URI selected:', uri.slice(-50));
-      if (mode === 'quick_scan' || mode === 'buy') {
+      if (isSinglePhotoMode(mode)) {
         setCapturedUri(uri); showActionBar();
       } else {
         const updated = [...deepUris]; updated[deepStep] = uri; setDeepUris(updated);
@@ -717,7 +730,7 @@ export default function CameraScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       if (!photo?.uri) return;
-      if (mode === 'quick_scan' || mode === 'buy') {
+      if (isSinglePhotoMode(mode)) {
         setCapturedUri(photo.uri); showActionBar();
       } else {
         const updated = [...deepUris]; updated[deepStep] = photo.uri; setDeepUris(updated);
@@ -823,7 +836,7 @@ export default function CameraScreen() {
 
   // ── Derived state ─────────────────────────────────────────────
 
-  const isSinglePhoto = mode === 'quick_scan' || mode === 'buy';
+  const isSinglePhoto = isSinglePhotoMode(mode);
   const isMultiMode = !isSinglePhoto;
   const steps       = mode === 'acc' ? ACC_STEPS : DEEP_STEPS;
   const stepInfo    = steps[deepStep];
@@ -886,6 +899,7 @@ export default function CameraScreen() {
               ? stepInfo.title
               : mode === 'buy'        ? strings.camera.buyModeLabel
               : mode === 'quick_scan' ? 'QUICK'
+              : mode === 'listing'    ? 'LISTING'
               : mode === 'acc'        ? 'ACCESSORY'
               : 'DETAILED'}
           </Text>

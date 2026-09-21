@@ -17,10 +17,16 @@
  */
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { supabase } from './supabase';
 
-/** Keep in sync with app.json → expo.version. */
-export const APP_VERSION = '1.0.0';
+/**
+ * app.json → expo.version, read from the manifest rather than duplicated here
+ * so a version bump cannot silently leave the analytics stamped with the old
+ * one. `expoConfig` is null in a few edge cases (a bare workflow host, some
+ * test runners), hence the fallback — this value is a label, never a gate.
+ */
+export const APP_VERSION: string = Constants.expoConfig?.version ?? 'unknown';
 
 export type AnalyticsEvent =
   | 'app_open'
