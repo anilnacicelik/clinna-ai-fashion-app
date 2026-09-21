@@ -1,4 +1,19 @@
 import { supabase } from './supabase';
+import { compressForUpload } from './imageCompress';
+
+/**
+ * Shrink the archive photo before it goes to Storage. Only the uploaded copy
+ * is compressed — the caller's local URI (what result screens show) is left
+ * alone. Any failure falls back to the original so the scan still gets a photo.
+ */
+async function archiveCopyOf(localUri: string): Promise<string> {
+  try {
+    return await compressForUpload(localUri);
+  } catch (err) {
+    console.warn('[storageUpload] Compression failed, uploading original:', err);
+    return localUri;
+  }
+}
 
 export async function uploadScanImage(
   localUri: string,
@@ -6,7 +21,10 @@ export async function uploadScanImage(
   userId:   string,
 ): Promise<string | null> {
   try {
-    const ext      = localUri.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const uploadUri = await archiveCopyOf(localUri);
+    // Derived from the file actually uploaded: .jpg after compression, the
+    // original extension if compression fell back.
+    const ext      = uploadUri.split('.').pop()?.toLowerCase() ?? 'jpg';
     const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
     // Storage RLS ("Users upload own images") requires the first path
     // segment to equal auth.uid() — see fix_rls_permissions.sql.
@@ -16,7 +34,7 @@ export async function uploadScanImage(
     // Using FormData is the most reliable approach:
     const formData = new FormData();
     formData.append('file', {
-      uri: localUri,
+      uri: uploadUri,
       name: `photo.${ext}`,
       type: mimeType,
     } as any);
