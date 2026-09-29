@@ -8,34 +8,29 @@ Configure in the RevenueCat dashboard:
   Project settings → Integrations → Webhooks
   URL:            https://<railway-domain>/api/v1/webhooks/revenuecat
   Auth header:    same value as REVENUECAT_WEBHOOK_SECRET env var
+
+Idempotency: RevenueCat retries an event it did not get a 2xx for. Each
+event id is claimed in public.webhook_events before it is applied (see
+supabase/webhook_events.sql); a repeat is acknowledged and skipped. If
+applying fails the claim is released, so the retry can apply it.
 """
 import hmac
 import logging
 import os
 from datetime import datetime, timezone
 
-import httpx
 from fastapi import APIRouter, Header, HTTPException, Request
+
+from services.supabase_admin import RpcMissing, rpc
 
 log = logging.getLogger("clinna.webhooks")
 
 router = APIRouter()
 
-SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
-
-# Read lazily (not at import time) so a missing service-role key / webhook
-# secret only breaks this endpoint, not the whole app (e.g. /analyze must
-# keep working even before RevenueCat webhook config is finished).
-
-
-def _service_key() -> str:
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    if not key:
-        raise HTTPException(503, "SUPABASE_SERVICE_ROLE_KEY not configured.")
-    return key
-
 
 def _webhook_secret() -> str:
+    # Read lazily (not at import time) so a missing secret only breaks this
+    # endpoint, not the whole app.
     secret = os.getenv("REVENUECAT_WEBHOOK_SECRET")
     if not secret:
         raise HTTPException(503, "REVENUECAT_WEBHOOK_SECRET not configured.")
@@ -56,22 +51,62 @@ PRO_PURCHASE_TYPES = {"INITIAL_PURCHASE", "RENEWAL", "PRODUCT_CHANGE", "UNCANCEL
 CREDIT_PURCHASE_TYPES = {"NON_RENEWING_PURCHASE", "INITIAL_PURCHASE"}
 EXPIRE_TYPES = {"EXPIRATION"}
 
+# RevenueCat reports a refund as CANCELLATION with this cancel_reason. For a
+# subscription, any other reason (UNSUBSCRIBE, BILLING_ERROR, …) only means
+# auto-renew is off: the user has paid through the period, and access ends
+# with the EXPIRATION event, not here. For a one-time credit pack there is
+# nothing to unsubscribe from — a CANCELLATION on one is always a refund.
+REFUND_CANCEL_REASON = "CUSTOMER_SUPPORT"
 
-async def _call_rpc(fn_name: str, payload: dict) -> None:
-    service_key = _service_key()
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/{fn_name}",
-            headers={
-                "apikey": service_key,
-                "Authorization": f"Bearer {service_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
-    if resp.status_code >= 300:
-        log.error("Supabase RPC %s failed: %s %s", fn_name, resp.status_code, resp.text)
-        raise HTTPException(502, f"Supabase RPC {fn_name} failed")
+
+async def _apply(event_type: str, app_user_id: str, product_id: str | None, event: dict) -> dict:
+    # Consumable credit packs
+    if event_type in CREDIT_PURCHASE_TYPES and product_id in CREDIT_AMOUNTS:
+        await rpc("internal_add_credits", {
+            "p_user_id": app_user_id,
+            "p_amount":  CREDIT_AMOUNTS[product_id],
+        })
+        return {"ok": True, "action": "credits_added", "amount": CREDIT_AMOUNTS[product_id]}
+
+    # Refunds
+    if event_type == "CANCELLATION":
+        if product_id in CREDIT_AMOUNTS:
+            try:
+                await rpc("internal_remove_credits", {
+                    "p_user_id": app_user_id,
+                    "p_amount":  CREDIT_AMOUNTS[product_id],
+                })
+            except RpcMissing:
+                log.warning("Credit refund for %s not applied — internal_remove_credits missing", app_user_id)
+                return {"ok": True, "action": "skipped_refund_unsupported"}
+            return {"ok": True, "action": "credits_refunded", "amount": CREDIT_AMOUNTS[product_id]}
+
+        if event.get("cancel_reason") == REFUND_CANCEL_REASON:
+            await rpc("internal_expire_pro", {"p_user_id": app_user_id})
+            return {"ok": True, "action": "pro_refunded"}
+
+        # Auto-renew switched off — Pro stays until EXPIRATION.
+        return {"ok": True, "action": "ignored_cancellation", "cancel_reason": event.get("cancel_reason")}
+
+    # Pro subscription grant/renewal
+    if event_type in PRO_PURCHASE_TYPES and product_id not in CREDIT_AMOUNTS:
+        expiration_ms = event.get("expiration_at_ms")
+        if expiration_ms:
+            expires_at = datetime.fromtimestamp(expiration_ms / 1000, tz=timezone.utc).isoformat()
+            await rpc("internal_set_pro", {
+                "p_user_id":   app_user_id,
+                "p_expires_at": expires_at,
+            })
+            return {"ok": True, "action": "pro_granted", "expires_at": expires_at}
+        log.warning("Pro purchase event without expiration_at_ms — skipping: %s", event)
+        return {"ok": True, "action": "skipped_no_expiration"}
+
+    # Subscription lapsed
+    if event_type in EXPIRE_TYPES:
+        await rpc("internal_expire_pro", {"p_user_id": app_user_id})
+        return {"ok": True, "action": "pro_expired"}
+
+    return {"ok": True, "action": "ignored", "event_type": event_type}
 
 
 @router.post("/revenuecat")
@@ -85,42 +120,43 @@ async def revenuecat_webhook(
     body  = await request.json()
     event = body.get("event", {})
 
+    event_id     = event.get("id")
     event_type   = event.get("type")
     app_user_id  = event.get("app_user_id")
     product_id   = event.get("product_id")
-    expiration_ms = event.get("expiration_at_ms")
 
     if not app_user_id or not event_type:
         raise HTTPException(400, "Malformed webhook payload.")
 
-    log.info("RevenueCat event=%s user=%s product=%s", event_type, app_user_id, product_id)
+    log.info("RevenueCat event=%s id=%s user=%s product=%s", event_type, event_id, app_user_id, product_id)
 
-    # Consumable credit packs
-    if event_type in CREDIT_PURCHASE_TYPES and product_id in CREDIT_AMOUNTS:
-        await _call_rpc("internal_add_credits", {
-            "p_user_id": app_user_id,
-            "p_amount":  CREDIT_AMOUNTS[product_id],
-        })
-        return {"ok": True, "action": "credits_added", "amount": CREDIT_AMOUNTS[product_id]}
-
-    # Pro subscription grant/renewal
-    if event_type in PRO_PURCHASE_TYPES and product_id not in CREDIT_AMOUNTS:
-        if expiration_ms:
-            expires_at = datetime.fromtimestamp(expiration_ms / 1000, tz=timezone.utc).isoformat()
-        else:
-            expires_at = None
-        if expires_at:
-            await _call_rpc("internal_set_pro", {
-                "p_user_id":   app_user_id,
-                "p_expires_at": expires_at,
+    # ── Idempotency ──────────────────────────────────────────────
+    claimed = False
+    if event_id:
+        try:
+            first_time = await rpc("internal_claim_webhook_event", {
+                "p_event_id":    event_id,
+                "p_event_type":  event_type,
+                "p_app_user_id": app_user_id,
+                "p_product_id":  product_id,
             })
-            return {"ok": True, "action": "pro_granted", "expires_at": expires_at}
-        log.warning("Pro purchase event without expiration_at_ms — skipping: %s", event)
-        return {"ok": True, "action": "skipped_no_expiration"}
+        except RpcMissing:
+            log.warning("webhook_events not installed — processing %s without duplicate protection", event_id)
+        else:
+            if first_time is False:
+                log.info("RevenueCat event %s already processed — skipping", event_id)
+                return {"ok": True, "action": "duplicate", "event_id": event_id}
+            claimed = True
+    else:
+        log.warning("RevenueCat event without id — cannot deduplicate: %s", event_type)
 
-    # Subscription lapsed
-    if event_type in EXPIRE_TYPES:
-        await _call_rpc("internal_expire_pro", {"p_user_id": app_user_id})
-        return {"ok": True, "action": "pro_expired"}
-
-    return {"ok": True, "action": "ignored", "event_type": event_type}
+    try:
+        return await _apply(event_type, app_user_id, product_id, event)
+    except Exception:
+        # Let RevenueCat's retry apply it: un-claim, then fail the request.
+        if claimed:
+            try:
+                await rpc("internal_release_webhook_event", {"p_event_id": event_id})
+            except Exception as e:
+                log.error("Could not release webhook event %s: %s", event_id, e)
+        raise
