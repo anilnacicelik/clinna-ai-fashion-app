@@ -47,6 +47,16 @@ class Financials(BaseModel):
     brand_markup:                Optional[float] = None
 
 
+# ── Entitlement after a paid scan ────────────────────────────────
+
+class ScanEntitlement(BaseModel):
+    """What the user has left once this scan has been charged (or refunded).
+    Absent on guest scans and while the server runs in legacy mode."""
+    scans_left:    int  = 0
+    credits:       int  = 0
+    is_pro_active: bool = False
+
+
 # ── Top-level response ────────────────────────────────────────────
 
 class ArchiveReport(BaseModel):
@@ -59,6 +69,7 @@ class ArchiveReport(BaseModel):
     processing_ms:   int         = 0
     scan_mode:       str         = "quick_scan"
     image_count:     int         = 1
+    entitlement:     Optional[ScanEntitlement] = None
 
 
 # ── Vinted Listing response ───────────────────────────────────────
@@ -79,3 +90,4 @@ class VintedListing(BaseModel):
     material:            str        = ""
     is_fashion_item:     bool       = True
     processing_ms:       int        = 0
+    entitlement:         Optional[ScanEntitlement] = None

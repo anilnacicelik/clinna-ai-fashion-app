@@ -3,6 +3,9 @@ CLINNA AI — Analyze Router v2
 GET  /health  (main.py)
 POST /api/v1/analyze          — quick_scan: single image
 POST /api/v1/analyze/deep     — deep_auth:  1-3 images
+
+Paid endpoints charge one scan server-side before Gemini is called and refund
+it when the analysis fails — see services/entitlement.py. 402 = nothing left.
 """
 import time
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request, Depends
@@ -10,6 +13,7 @@ from models.schemas import ArchiveReport, VintedListing
 from analyzers.archivist import run_archive_analysis
 from analyzers.listing import run_listing_analysis
 from services.auth import require_user
+from services.entitlement import run_paid_scan
 from services.rate_limit import limiter
 
 router = APIRouter()
@@ -41,7 +45,10 @@ async def analyze_quick(
         raise HTTPException(413, "Image too large. Max 10 MB.")
 
     t0 = time.monotonic()
-    report = await run_archive_analysis(images=[(data, mime)], scan_mode="quick_scan")
+    report = await run_paid_scan(
+        user_id,
+        lambda: run_archive_analysis(images=[(data, mime)], scan_mode="quick_scan"),
+    )
     report.processing_ms = int((time.monotonic() - t0) * 1000)
     report.scan_mode     = "quick_scan"
     report.image_count   = 1
@@ -102,7 +109,10 @@ async def analyze_deep(
         raise HTTPException(400, "At least one image (product) is required.")
 
     t0 = time.monotonic()
-    report = await run_archive_analysis(images=images, scan_mode=scan_mode)
+    report = await run_paid_scan(
+        user_id,
+        lambda: run_archive_analysis(images=images, scan_mode=scan_mode),
+    )
     report.processing_ms = int((time.monotonic() - t0) * 1000)
     report.scan_mode     = scan_mode
     report.image_count   = len(images)
@@ -125,7 +135,10 @@ async def analyze_listing(
         raise HTTPException(413, "Image too large. Max 10 MB.")
 
     t0 = time.monotonic()
-    listing = await run_listing_analysis(images=[(data, mime)])
+    listing = await run_paid_scan(
+        user_id,
+        lambda: run_listing_analysis(images=[(data, mime)]),
+    )
     listing.processing_ms = int((time.monotonic() - t0) * 1000)
     return listing
 
