@@ -14,6 +14,7 @@ import ArchiveStatus from '../components/ArchiveStatus';
 import { useAutoArchive } from '../hooks/useAutoArchive';
 import { track } from '../services/analytics';
 import { maybeRequestReview } from '../services/review';
+import { strings } from '../i18n/strings';
 
 type ListingResultRouteProp = RouteProp<RootStackParamList, 'ListingResult'>;
 type Nav = NativeStackNavigationProp<RootStackParamList, 'ListingResult'>;
@@ -29,7 +30,11 @@ export default function ListingResultScreen() {
 
   // Filed on open like every other result screen — no SAVE button, just a
   // status and a way to take it back out.
-  const archive = useAutoArchive(archiveKey, { mode: 'listing', imageUri, listing });
+  // A failed draft comes back as is_fashion_item = false (refunded) — not filed.
+  const archive = useAutoArchive(
+    listing.is_fashion_item === false ? null : archiveKey,
+    { mode: 'listing', imageUri, listing },
+  );
 
   useEffect(() => { maybeRequestReview(); }, []);
 
@@ -263,6 +268,15 @@ ${listing.hashtags.map(h => '#' + h).join(' ')}`;
             <Text style={styles.textButtonText}>NEW LISTING</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.feedbackBtn}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation.navigate('Feedback'); }}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+          >
+            <Text style={styles.feedbackTxt}>{strings.common.feedbackBtn}</Text>
+          </TouchableOpacity>
+
           <View style={styles.footer}>
             <Text style={styles.footerText}>── CLINNA ──</Text>
             <Text style={styles.footerText}>AI-generated listing draft. Verify details before posting.</Text>
@@ -459,6 +473,9 @@ const styles = StyleSheet.create({
     color: C.grey400,
     textDecorationLine: 'underline',
   },
+  // Same as BuyResultScreen's feedback link.
+  feedbackBtn: { marginTop: SP.lg, alignItems: 'center' },
+  feedbackTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 1.5, color: C.grey600 },
   footer: {
     marginTop: SP.xl,
     alignItems: 'center',

@@ -78,7 +78,9 @@
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.VIBRATE",
+        "android.permission.VIBRATE"
+      ],
+      "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -87,7 +89,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Clinna uses your camera to photograph garments and accessories for authentication."
+          "cameraPermission": "Clinna uses your camera to photograph garments and accessories for authentication.",
+          "recordAudioAndroid": false
         }
       ],
       [

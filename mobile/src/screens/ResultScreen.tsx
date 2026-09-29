@@ -43,7 +43,7 @@ import CostCard, { CostBar } from '../components/CostCard';
 import { formatUsd } from '../utils/cost';
 import { useAutoArchive } from '../hooks/useAutoArchive';
 import ArchiveStatus from '../components/ArchiveStatus';
-import { track } from '../services/analytics';
+import { track, APP_VERSION } from '../services/analytics';
 import { maybeRequestReview } from '../services/review';
 
 const { width } = Dimensions.get('window');
@@ -202,7 +202,9 @@ export default function ResultScreen() {
   // Arriving from BuyResult reuses that scan's key, so FULL REPORT reads the
   // existing row instead of writing a second one.
   const archive = useAutoArchive(
-    sample || guestMode ? null : archiveKey,
+    // A failed analysis comes back as is_fashion_item = false and the scan is
+    // refunded — nothing to file.
+    sample || guestMode || !r.is_fashion_item ? null : archiveKey,
     { mode: fromBuy ? 'buy' : 'full', imageUri, report: r },
   );
 
@@ -250,6 +252,11 @@ export default function ResultScreen() {
   }, [r, shareState, fromBuy]);
 
   // ── Start a real analysis ────────────────────────────────────────
+  const handleFeedback = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('Feedback');
+  }, [navigation]);
+
   // A real scan costs a credit and hits the backend, so it needs an account.
   // From the sample a signed-out visitor lands on Auth and resumes at Camera.
   const handleNewAnalysis = useCallback(() => {
@@ -450,7 +457,7 @@ export default function ResultScreen() {
 
           {/* Footer stamp */}
           <View style={S.footer}>
-            <Text style={S.footerTxt}>CLINNA AI  ·  v0.7.0  ·  {r.processing_ms}ms</Text>
+            <Text style={S.footerTxt}>CLINNA AI  ·  v{APP_VERSION}  ·  {r.processing_ms}ms</Text>
           </View>
 
           {/* ── CTA blok ── */}
@@ -515,6 +522,15 @@ export default function ResultScreen() {
               {/* NEW ANALYSIS — secondary outline */}
               <TouchableOpacity style={S.outlineBtn} onPress={handleNewAnalysis} activeOpacity={0.7}>
                 <Text style={S.outlineBtnTxt}>NEW ANALYSIS →</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={S.feedbackBtn}
+                onPress={handleFeedback}
+                activeOpacity={0.6}
+                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+              >
+                <Text style={S.feedbackTxt}>{strings.common.feedbackBtn}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -592,6 +608,10 @@ const S = StyleSheet.create({
 
   outlineBtn:    { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', paddingVertical: 17, paddingHorizontal: SP.lg, flexDirection: 'row', justifyContent: 'center' },
   outlineBtnTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 3, color: C.grey400 },
+
+  // Same as BuyResultScreen's feedback link.
+  feedbackBtn: { marginTop: SP.lg, alignItems: 'center' },
+  feedbackTxt: { fontFamily: F.mono, fontSize: FS.xxs, letterSpacing: 1.5, color: C.grey600 },
 
   hiddenCardWrap: { position: 'absolute', top: -9999, left: -9999 },
 });

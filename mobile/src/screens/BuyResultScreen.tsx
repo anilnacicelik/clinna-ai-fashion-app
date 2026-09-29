@@ -86,7 +86,7 @@ export default function BuyResultScreen() {
 
   // Filed on open. A guest scan has no account to file it against.
   const archive = useAutoArchive(
-    guestMode ? null : archiveKey,
+    guestMode || !r.is_fashion_item ? null : archiveKey,
     { mode: 'buy', imageUri, report: r, tagPrice },
   );
 
