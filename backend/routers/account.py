@@ -3,27 +3,33 @@ CLINNA AI — Account deletion
 Required by Apple App Store guideline 5.1.1(v): apps that support account
 creation must offer in-app account deletion. Deleting the auth.users row
 cascades to public.profiles and public.scans (ON DELETE CASCADE / user_id FK).
+Storage has no such cascade, so the user's archive photos are removed first.
 """
 import logging
-import os
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from services.auth import require_user
+from services.supabase_admin import SUPABASE_URL, delete_user_storage, service_key as get_service_key
 
 log = logging.getLogger("clinna.account")
 
 router = APIRouter()
 
-SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
-
 
 @router.delete("")
 async def delete_account(user_id: str = Depends(require_user)):
-    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    if not service_key:
-        raise HTTPException(503, "SUPABASE_SERVICE_ROLE_KEY not configured.")
+    service_key = get_service_key()
+
+    # Photos first: once the auth user is gone nothing ties the folder to
+    # anyone. A storage failure is logged, not fatal — the user asked for the
+    # account to go, and the private bucket keeps any leftovers unreadable.
+    try:
+        removed = await delete_user_storage(user_id)
+        log.info("Deleted %d archive photo(s) for %s", removed, user_id)
+    except Exception as e:
+        log.error("Archive photo cleanup failed for %s: %s", user_id, e)
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.delete(

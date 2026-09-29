@@ -16,6 +16,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { uploadScanImage } from './storageUpload';
+import { removeScanImages } from './scanImages';
 import { ArchiveReport, VintedListing } from './api';
 import { markupOf } from '../utils/cost';
 
@@ -133,6 +134,8 @@ export async function archiveScan(input: ArchiveInput): Promise<string> {
 export async function removeArchivedScan(scanId: string): Promise<void> {
   const { error } = await supabase.from('scans').delete().eq('id', scanId);
   if (error) throw new Error(error.message);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) await removeScanImages(user.id, scanId);
   await removeLocalHistory(scanId);
 }
 

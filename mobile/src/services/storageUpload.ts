@@ -26,8 +26,8 @@ export async function uploadScanImage(
     // original extension if compression fell back.
     const ext      = uploadUri.split('.').pop()?.toLowerCase() ?? 'jpg';
     const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-    // Storage RLS ("Users upload own images") requires the first path
-    // segment to equal auth.uid() — see fix_rls_permissions.sql.
+    // Storage RLS ("scans_images_insert_own") requires the first path
+    // segment to equal auth.uid() — see supabase/fix_storage_private.sql.
     const filePath = `${userId}/${scanId}/photo.${ext}`;
 
     // "fetch().blob()" is chronically broken in React Native.
@@ -49,26 +49,19 @@ export async function uploadScanImage(
       return null;
     }
 
-    // 2. Public URL al
-    const { data: urlData } = supabase.storage
-      .from('scans_images')
-      .getPublicUrl(filePath);
-
-    const publicUrl = urlData?.publicUrl ?? null;
-
-    if (!publicUrl) return null;
-
-    // 3. Update the image_url for this row in the scans table
+    // 2. Store the storage path, not a URL. The bucket is private — the
+    //    archive signs this path on display (see scanImages.ts), which also
+    //    still understands the full public URLs older rows carry.
     const { error: updateError } = await supabase
       .from('scans')
-      .update({ image_url: publicUrl })
+      .update({ image_url: filePath })
       .eq('id', scanId);
 
     if (updateError) {
       console.error('[storageUpload] DB update error:', updateError.message);
     }
 
-    return publicUrl;
+    return filePath;
 
   } catch (err) {
     console.error('[storageUpload] Unexpected error:', err);

@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../services/supabase';
 import { useScansLeft } from '../hooks/useScansLeft';
+import { removeArchivedScan } from '../services/archive';
+import { resolveScanImages } from '../services/scanImages';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { strings } from '../i18n/strings';
 import { formatUsd } from '../utils/cost';
@@ -73,7 +75,17 @@ function formatDate(iso: string): string {
 
 // ─── Single scan row ─────────────────────────────────────────────
 
-function ScanRow({ item, onLongPress }: { item: ScanRecord; onLongPress: () => void }) {
+function ScanRow({ item, imageUri, onLongPress }: {
+  item:        ScanRecord;
+  /** Signed URL for the photo — undefined until signed, or if signing failed. */
+  imageUri:    string | undefined;
+  onLongPress: () => void;
+}) {
+  // A signed URL can still fail to load (expired, file gone) — fall back to
+  // the placeholder instead of an empty box.
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => { setImageFailed(false); }, [imageUri]);
+
   const buyDetail = [
     item.tag_price  != null ? strings.archive.tagPriceMeta(formatUsd(item.tag_price)) : null,
     item.markup_pct != null ? strings.archive.markupMeta(item.markup_pct)             : null,
@@ -89,8 +101,13 @@ function ScanRow({ item, onLongPress }: { item: ScanRecord; onLongPress: () => v
 
         {/* Photo thumbnail */}
         <View style={ROW.thumb}>
-          {item.image_url ? (
-            <Image source={{ uri: item.image_url }} style={ROW.thumbImg} resizeMode="cover" />
+          {imageUri && !imageFailed ? (
+            <Image
+              source={{ uri: imageUri }}
+              style={ROW.thumbImg}
+              resizeMode="cover"
+              onError={() => setImageFailed(true)}
+            />
           ) : (
             <View style={ROW.thumbPlaceholder}>
               <Text style={ROW.thumbPlaceholderTxt}>—</Text>
@@ -240,6 +257,9 @@ export default function HistoryScreen() {
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
+  // image_url → signed URL. Rows render straight away with a placeholder and
+  // pick their photo up once signing lands.
+  const [imageUrls,  setImageUrls]  = useState<Record<string, string>>({});
 
   // ── Fetch data ───────────────────────────────────────────────
 
@@ -265,7 +285,10 @@ export default function HistoryScreen() {
       }
 
       if (res.error) throw res.error;
-      setScans((res.data as ScanRecord[]) ?? []);
+      const rows = (res.data as ScanRecord[]) ?? [];
+      setScans(rows);
+      resolveScanImages(rows.map(r => r.image_url).filter((u): u is string => !!u))
+        .then(setImageUrls);
     } catch (e: any) {
       console.error('[HistoryScreen] fetchScans:', e);
       setError('ARCHIVE COULD NOT BE LOADED.');
@@ -306,15 +329,14 @@ export default function HistoryScreen() {
           text: '[ DELETE ]',
           style: 'destructive',
           onPress: async () => {
-            const { error: deleteError } = await supabase
-              .from('scans')
-              .delete()
-              .eq('id', item.id);
-
-            if (!deleteError) {
+            // Row, stored photo and offline copy — see services/archive.ts.
+            try {
+              await removeArchivedScan(item.id);
               // 2. Haptics when delete completes
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               setScans(prev => prev.filter(s => s.id !== item.id));
+            } catch (e) {
+              console.error('[HistoryScreen] delete failed:', e);
             }
           },
         },
@@ -378,7 +400,11 @@ export default function HistoryScreen() {
           data={scans}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
-            <ScanRow item={item} onLongPress={() => handleDelete(item)} />
+            <ScanRow
+              item={item}
+              imageUri={item.image_url ? imageUrls[item.image_url] : undefined}
+              onLongPress={() => handleDelete(item)}
+            />
           )}
           ItemSeparatorComponent={Separator}
           ListEmptyComponent={EmptyState}
