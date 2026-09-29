@@ -12,8 +12,9 @@
  * FIX 3 — Dynamic Scan Counter:
  *   Counter is read via the useScansLeft hook.
  *   If scansLeft === 0, pressing ANALYZE navigates to Paywall.
- *   On successful scan, decrement()/useCredit() is awaited and any
- *   sync failure is surfaced to the user (not silently swallowed).
+ *   v2.0.1: the backend charges the scan (and refunds a failed one); the
+ *   response carries the new counts, applied here. A 402 from the backend
+ *   also lands on the Paywall. Nothing is deducted client-side any more.
  *
  * v2 — BEFORE YOU BUY:
  *   A fifth mode, 'buy'. Single photo like quick scan, same /analyze endpoint,
@@ -26,12 +27,12 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image, TextInput,
-  Animated, StatusBar, Dimensions, Alert, KeyboardAvoidingView, Platform, ScrollView,
+  Animated, StatusBar, Dimensions, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { CameraView, CameraType, FlashMode, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -562,17 +563,16 @@ export default function CameraScreen() {
   const { state, runQuickScan, runGuestQuickScan, runDeepAuth, runAccScan, runListingScan, reset } = useAnalysis();
 
   // Entitlement state
-  const { scansLeft, credits, isProActive, decrement, useCredit } = useScansLeft();
+  const { scansLeft, credits, isProActive, load: loadEntitlement, applyEntitlement } = useScansLeft();
 
-  // Which currency was decided at the moment ANALYZE was pressed
-  const entitlementMethodRef = useRef<'decrement' | 'useCredit' | 'pro' | null>(null);
+  // Re-read on focus — coming back from the Paywall after a purchase must not
+  // leave the gate below looking at the old zero.
+  useFocusEffect(useCallback(() => { loadEntitlement(); }, [loadEntitlement]));
 
-  // ── Navigate on success + deduct correct entitlement ─────────
+  // ── Navigate on success + sync entitlement ───────────────────
   useEffect(() => {
     if (state.status === 'success' || state.status === 'listingSuccess') {
       hap.success(); playSFX('success');
-      const method = entitlementMethodRef.current;
-      entitlementMethodRef.current = null;
 
       const preview   = (mode === 'deep_auth' || mode === 'acc') ? deepUris[0] : capturedUri;
       const isBuy     = mode === 'buy';
@@ -614,25 +614,21 @@ export default function CameraScreen() {
       }
       reset();
 
-      // Deduct the currency that was chosen when scan started. null means
-      // the RPC itself failed (not "0 left") — tell the user rather than
-      // failing silently; the alert surfaces on top of whatever screen is
-      // visible by the time the await resolves.
-      (async () => {
-        if (method === 'decrement') {
-          const result = await decrement();
-          if (result === null) {
-            Alert.alert(strings.camera.syncIssueTitle, strings.camera.syncIssueScan, [{ text: strings.common.okBtn }]);
-          }
-        } else if (method === 'useCredit') {
-          const result = await useCredit();
-          if (result === null) {
-            Alert.alert(strings.camera.syncIssueTitle, strings.camera.syncIssueCredit, [{ text: strings.common.okBtn }]);
-          }
-        }
-        // 'pro' → no deduction needed
-      })();
+      // The backend already charged (or refunded) this scan — mirror its
+      // counts. No entitlement means a guest scan or a legacy backend; re-read.
+      const ent = state.status === 'success' ? state.data.entitlement : state.listing.entitlement;
+      if (ent) applyEntitlement(ent);
+      else loadEntitlement();
     }
+  }, [state.status]);
+
+  // ── Backend said nothing is left (402) — same place as the local gate ──
+  useEffect(() => {
+    if (state.status !== 'noCredits') return;
+    reset();
+    loadEntitlement();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigation.navigate('Paywall');
   }, [state.status]);
 
   // ── Failed scans — the banner already tells the user; this tells us ──
@@ -756,7 +752,6 @@ export default function CameraScreen() {
     // to reach it (Apple 5.1.1(v)).
     if (guestMode) {
       if ((mode !== 'quick_scan' && mode !== 'buy') || !capturedUri) return;
-      entitlementMethodRef.current = null;
       track('scan_started', { mode: archiveModeOf(mode) });
       runGuestQuickScan(capturedUri);
       return;
@@ -767,15 +762,6 @@ export default function CameraScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       navigation.navigate('Paywall');
       return;
-    }
-
-    // Decide which currency to deduct on success
-    if (isProActive) {
-      entitlementMethodRef.current = 'pro';
-    } else if (scansLeft > 0) {
-      entitlementMethodRef.current = 'decrement';
-    } else {
-      entitlementMethodRef.current = 'useCredit';
     }
 
     track('scan_started', { mode: archiveModeOf(mode) });

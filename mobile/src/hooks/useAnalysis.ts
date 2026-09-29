@@ -13,7 +13,10 @@ export type AnalysisState =
   | { status: 'success'; data: ArchiveReport }
   | { status: 'listingSuccess'; listing: VintedListing }
   | { status: 'error';   message: string; retryable: boolean }
-  | { status: 'quota';   countdown: number };
+  | { status: 'quota';   countdown: number }
+  // Backend refused the scan: nothing left to spend (HTTP 402). The caller
+  // routes to the paywall — this is not shown as an error.
+  | { status: 'noCredits' };
 
 export function useAnalysis() {
   const [state, setState] = useState<AnalysisState>({ status: 'idle' });
@@ -45,6 +48,7 @@ export function useAnalysis() {
         `[CLINNA] ApiError — code: ${err.code} | retryable: ${err.retryable} | debug: "${err.debugReason ?? 'n/a'}"`
       );
       if (err.code === 429) return startCountdown(err.retryAfterSeconds ?? 30);
+      if (err.code === 402) return setState({ status: 'noCredits' });
       setState({ status: 'error', message: err.message, retryable: err.retryable });
     } else {
       const raw = err instanceof Error ? err.message : String(err);

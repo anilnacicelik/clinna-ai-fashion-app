@@ -53,6 +53,16 @@ export interface Financials {
   estimated_retail_price_usd:  number | null;  // null unless brand is confirmed
   brand_markup:                 number | null;  // null unless brand is confirmed
 }
+/**
+ * What the user has left after a paid scan — charged (or refunded) by the
+ * backend, which is the only place scans are deducted. Absent on guest scans
+ * and on a backend still running in legacy mode.
+ */
+export interface ScanEntitlement {
+  scans_left:    number;
+  credits:       number;
+  is_pro_active: boolean;
+}
 export interface ArchiveReport {
   archive_id:      ArchiveId;
   color_analysis:  ColorAnalysis;
@@ -63,6 +73,7 @@ export interface ArchiveReport {
   processing_ms:   number;
   scan_mode:       'quick_scan' | 'deep_auth' | 'acc';
   image_count:     number;
+  entitlement?:    ScanEntitlement | null;
 }
 export type ScanMode = 'quick_scan' | 'deep_auth' | 'acc' | 'listing';
 export interface DeepAuthImages {
@@ -88,6 +99,7 @@ export interface VintedListing {
   material:            string;
   is_fashion_item:     boolean;
   processing_ms:       number;
+  entitlement?:        ScanEntitlement | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -254,6 +266,11 @@ async function handleResponse(res: Response): Promise<ArchiveReport> {
     throw new ApiError(429, strings.common.errors.systemBusy(after), true, after, 'Gemini rate limit');
   }
 
+  if (res.status === 402) {
+    console.warn('[CLINNA API] 402 — no scans left (server-side check)');
+    throw new ApiError(402, strings.common.errors.noScansLeft, false);
+  }
+
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
     try {
@@ -352,6 +369,11 @@ async function handleListingResponse(res: Response): Promise<VintedListing> {
     const after = parseInt(res.headers.get('Retry-After') ?? '30', 10);
     console.warn(`[CLINNA API] 429 Quota — retry after ${after}s`);
     throw new ApiError(429, strings.common.errors.systemBusy(after), true, after, 'Gemini rate limit');
+  }
+
+  if (res.status === 402) {
+    console.warn('[CLINNA API] 402 — no scans left (server-side check)');
+    throw new ApiError(402, strings.common.errors.noScansLeft, false);
   }
 
   if (!res.ok) {

@@ -20,6 +20,9 @@ export const strings = {
     cancelBtn:        '[ CANCEL ]',
     retryBtn:         '[ RETRY ]',
     okBtn:            '[ OK ]',
+    // Result screens — ResultScreen + ListingResultScreen (Home and BuyResult
+    // keep their own keys below).
+    feedbackBtn:      '[ FEEDBACK ]',
 
     // Brand wordmark — HomeScreen + AuthScreen
     wordmark: 'Clinna',
@@ -37,6 +40,7 @@ export const strings = {
       requestTimeout:     'REQUEST TIMED OUT — TRY AGAIN.',
       serverError:        'SOMETHING WENT WRONG ON OUR END. PLEASE TRY AGAIN.',
       unexpected:         'AN UNEXPECTED ERROR OCCURRED. PLEASE TRY AGAIN.',
+      noScansLeft:        'NO SCANS LEFT — GET CREDITS TO CONTINUE.',
     },
 
   },
@@ -111,13 +115,10 @@ export const strings = {
     tagPriceSkip:      '[ SKIP ]',
     buyModeLabel:      'BEFORE YOU BUY',
     hintAfterCapture:  'Full garment in frame? Retake if cut off.',
-    syncIssueTitle:    '[ SYNC ISSUE ]',
-    syncIssueScan:     'YOUR SCAN COUNT COULD NOT BE UPDATED. CHECK YOUR CONNECTION — YOUR REPORT IS STILL READY.',
-    syncIssueCredit:   'YOUR CREDIT COULD NOT BE DEDUCTED. CHECK YOUR CONNECTION — YOUR REPORT IS STILL READY.',
   },
   result:  {
     notFashionTitle: 'NOT A FASHION ITEM',
-    notFashionNote:  'No fashion item detected. This scan has been counted.',
+    notFashionNote:  'No fashion item detected. This scan was not counted.',
 
     // Sample mode — hardcoded example report, no session, no scan spent
     sampleTitle:       'SAMPLE',
@@ -150,7 +151,7 @@ export const strings = {
     feedbackBtn:       '[ FEEDBACK ]',
     disclaimer:        'AI estimate from a single photo — production cost only, not a valuation or buying advice.',
     notFashionTitle:   'NOT A FASHION ITEM',
-    notFashionNote:    'No fashion item detected. This scan has been counted.',
+    notFashionNote:    'No fashion item detected. This scan was not counted.',
     tryAgainBtn:       'TRY AGAIN →',
   },
 
