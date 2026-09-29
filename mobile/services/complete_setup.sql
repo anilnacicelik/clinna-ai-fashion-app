@@ -2,6 +2,20 @@
 -- CLINNA — Complete Setup (idempotent, tek dosya)
 -- Supabase Dashboard → SQL Editor'de çalıştır.
 --
+-- ⚠ v2.0.1 UYARISI — CANLIDA TEKRAR ÇALIŞTIRMA.
+--   Bu dosya v2.0.1 öncesi hali kurar: scans_images bucket'ını PUBLIC
+--   yapar, istemci tarafı kredi düşümünü (decrement_scans_left /
+--   use_credit) GERİ AÇAR ve gevşek profiles_insert_own kuralını
+--   geri koyar. Sunucu da düştüğü için sonuç ÇİFT DÜŞÜM olur.
+--   Sıfır bir veritabanında ya da yanlışlıkla çalıştırıldıysa, hemen
+--   ardından şunları bu sırayla çalıştır (hepsi repo kökündeki
+--   supabase/ klasöründe):
+--     1. supabase/v2_events_feedback.sql
+--     2. supabase/fix_storage_private.sql
+--     3. supabase/consume_scan_credit.sql
+--     4. supabase/webhook_events.sql
+--     5. supabase/tighten_profiles_insert.sql
+--
 -- Bu dosya full_migration.sql + credits_migration.sql +
 -- security_hardening_migration.sql + marketing_consent_migration.sql +
 -- supabase_migration.sql + fix_rls_permissions.sql'in tamamını TEK
